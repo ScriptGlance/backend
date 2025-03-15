@@ -2,9 +2,12 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import {StandardResponseExceptionFilter} from "./common/filter/StandardResponseExceptionFilter";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.useGlobalFilters(new StandardResponseExceptionFilter());
+
 
   const config = new DocumentBuilder()
     .setTitle('My API')

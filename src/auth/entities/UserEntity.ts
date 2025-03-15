@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 import { TariffPlan } from '../../common/enum/TariffPlan';
 
-@Entity('users')
+@Entity('user')
 export class UserEntity {
   @PrimaryGeneratedColumn({ name: 'user_id' })
   userId: number;
@@ -26,7 +26,7 @@ export class UserEntity {
     enum: TariffPlan,
     default: TariffPlan.BASIC,
   })
-  plan?: TariffPlan;
+  plan: TariffPlan;
 
   @Column({ name: 'google_id', nullable: true })
   googleId?: string;

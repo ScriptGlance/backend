@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 import { ModeratorStatus } from '../../common/enum/ModeratorStatus';
 
-@Entity('moderators')
+@Entity('moderator')
 export class ModeratorEntity {
   @PrimaryGeneratedColumn({ name: 'moderator_id' })
   moderatorId: number;
