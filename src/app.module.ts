@@ -9,6 +9,7 @@ import { ModeratorEntity } from './auth/entities/ModeratorEntity';
 import { AdminEntity } from './auth/entities/AdminEntity';
 import { PasswordResetTokenEntity } from './auth/entities/PasswordResetTokenEntity';
 import { EmailVerificationCodeEntity } from './auth/entities/EmailVerificationCodeEntity';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { EmailVerificationCodeEntity } from './auth/entities/EmailVerificationCo
       inject: [ConfigService],
     }),
     AuthModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [AppService],
