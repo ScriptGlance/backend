@@ -5,8 +5,8 @@ import { LoginDto } from './dto/LoginDto';
 import { ForgotPasswordDto } from './dto/ForgotPasswordDto';
 import { ResetPasswordDto } from './dto/ResetPasswordDto';
 import { ApiBody } from '@nestjs/swagger';
-import {VerifyEmailDto} from "./dto/VerifyEmailDto";
-import {SendVerificationEmailDto} from "./dto/SendVerificationEmailDto";
+import { VerifyEmailDto } from './dto/VerifyEmailDto';
+import { SendVerificationEmailDto } from './dto/SendVerificationEmailDto';
 
 @Controller('auth')
 export class AuthController {
