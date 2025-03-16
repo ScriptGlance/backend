@@ -8,12 +8,16 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PasswordResetTokenEntity } from './entities/PasswordResetTokenEntity';
 import { EmailVerificationCodeEntity } from './entities/EmailVerificationCodeEntity';
 import { EmailModule } from '../email/email.module';
+import { ModeratorEntity } from './entities/ModeratorEntity';
+import { AdminEntity } from './entities/AdminEntity';
 
 @Module({
   imports: [
     ConfigModule,
     TypeOrmModule.forFeature([
       UserEntity,
+      ModeratorEntity,
+      AdminEntity,
       PasswordResetTokenEntity,
       EmailVerificationCodeEntity,
     ]),

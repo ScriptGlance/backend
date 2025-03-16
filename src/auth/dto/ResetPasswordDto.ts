@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, MaxLength, MinLength } from 'class-validator';
+import { IsEnum, IsNotEmpty, MaxLength, MinLength } from 'class-validator';
+import { Role } from '../../common/enum/Role';
 
 export class ResetPasswordDto {
   @ApiProperty({ description: 'Password reset token' })
@@ -11,4 +12,13 @@ export class ResetPasswordDto {
   @MinLength(4)
   @IsNotEmpty()
   newPassword: string;
+
+  @ApiProperty({
+    description: 'User role',
+    enum: Role,
+    example: Role.User,
+  })
+  @IsEnum(Role, { message: 'Role must be either user, moderator, or admin' })
+  @IsNotEmpty()
+  role: Role;
 }

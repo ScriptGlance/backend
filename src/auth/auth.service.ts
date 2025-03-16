@@ -25,12 +25,19 @@ import { VerifyEmailDto } from './dto/VerifyEmailDto';
 import { VerificationEmailResponseDto } from './dto/VerificationEmailResponseDto';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
+import { ModeratorEntity } from './entities/ModeratorEntity';
+import { AdminEntity } from './entities/AdminEntity';
+import { Role } from '../common/enum/Role';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
+    @InjectRepository(ModeratorEntity)
+    private moderatorRepository: Repository<ModeratorEntity>,
+    @InjectRepository(AdminEntity)
+    private adminRepository: Repository<AdminEntity>,
     private jwtService: JwtService,
     @InjectRepository(PasswordResetTokenEntity)
     private passwordResetTokenRepository: Repository<PasswordResetTokenEntity>,
@@ -73,16 +80,14 @@ export class AuthService {
     await this.userRepository.save(user);
     await this.emailVerificationCodeRepository.remove([verificationCode]);
     return {
-      data: new TokenResponseDto(this.generateAuthToken(user)),
+      data: new TokenResponseDto(this.generateAuthToken(Role.User, user)),
       error: false,
     };
   }
 
   async login(loginDto: LoginDto): Promise<StandardResponse<TokenResponseDto>> {
-    const user = await this.userRepository.findOne({
-      where: { email: loginDto.email },
-    });
-    if (!user) {
+    const account = await this.getAccountByEmail(loginDto.role, loginDto.email);
+    if (account === null) {
       throw new ErrorCodeHttpException(
         'Invalid credentials',
         AuthErrorCode.InvalidCredentials,
@@ -91,7 +96,7 @@ export class AuthService {
     }
     const passwordValid = await bcrypt.compare(
       loginDto.password,
-      user.password,
+      account.password,
     );
     if (!passwordValid) {
       throw new ErrorCodeHttpException(
@@ -103,7 +108,9 @@ export class AuthService {
 
     console.log('Logging in user:', loginDto.email);
     return {
-      data: new TokenResponseDto(this.generateAuthToken(user)),
+      data: new TokenResponseDto(
+        this.generateAuthToken(loginDto.role, account),
+      ),
       error: false,
     };
   }
@@ -111,20 +118,19 @@ export class AuthService {
   async forgotPassword(
     forgotPasswordDto: ForgotPasswordDto,
   ): Promise<StandardResponse<any>> {
-    const user = await this.userRepository.findOne({
-      where: { email: forgotPasswordDto.email },
-    });
-    if (!user) {
+    const account = await this.getAccountByEmail(
+      forgotPasswordDto.role,
+      forgotPasswordDto.email,
+    );
+    if (account === null) {
       return { error: false };
     }
-
     const existingToken = await this.passwordResetTokenRepository.findOne({
       where: {
-        user: user,
+        [forgotPasswordDto.role]: account,
         expiresAt: MoreThan(new Date()),
       },
     });
-
     if (existingToken) {
       throw new ErrorCodeHttpException(
         'A password reset token has already been issued and is still valid.',
@@ -132,18 +138,16 @@ export class AuthService {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-
-    const token = this.jwtService.sign(
-      { sub: user.userId, email: user.email },
-      { expiresIn: `${PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES}m` },
+    const token = this.generateResetPasswordToken(
+      forgotPasswordDto.role,
+      account,
     );
-
     const expiresAt = new Date();
     expiresAt.setMinutes(
       expiresAt.getMinutes() + PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES,
     );
     const passwordResetToken = this.passwordResetTokenRepository.create({
-      user: user,
+      [forgotPasswordDto.role]: account,
       token: token,
       expiresAt: expiresAt,
     });
@@ -180,9 +184,7 @@ export class AuthService {
     </html>
     `,
     );
-
     await this.passwordResetTokenRepository.save(passwordResetToken);
-
     return { error: false };
   }
 
@@ -197,24 +199,29 @@ export class AuthService {
 
     const resetToken = await this.passwordResetTokenRepository.findOne({
       where: { token: resetPasswordDto.token },
-      relations: { user: true },
+      relations: { [resetPasswordDto.role]: true },
     });
-    if (resetToken === null) {
+    if (resetToken === null || !resetToken[resetPasswordDto.role]) {
       throw new ErrorCodeHttpException(
         'Invalid reset token',
         AuthErrorCode.InvalidResetPasswordToken,
         HttpStatus.UNAUTHORIZED,
       );
     }
-    resetToken.user!.password = await this.hashPassword(
+    resetToken[resetPasswordDto.role]!.password = await this.hashPassword(
       resetPasswordDto.newPassword,
     );
 
-    await this.userRepository.save(resetToken.user!);
+    await this.userRepository.save(resetToken[resetPasswordDto.role]!);
     await this.passwordResetTokenRepository.remove([resetToken]);
     console.log('Resetting password using token:', resetPasswordDto.token);
     return {
-      data: new TokenResponseDto(this.generateAuthToken(resetToken.user!)),
+      data: new TokenResponseDto(
+        this.generateAuthToken(
+          resetPasswordDto.role,
+          resetToken[resetPasswordDto.role]!,
+        ),
+      ),
       error: false,
     };
   }
@@ -222,12 +229,13 @@ export class AuthService {
   async sendVerificationEmail(
     sendVerificationEmailDto: SendVerificationEmailDto,
   ): Promise<StandardResponse<VerificationEmailResponseDto>> {
-    const existingUser = await this.userRepository.findOne({
-      where: { email: sendVerificationEmailDto.email },
-    });
-    if (existingUser) {
+    const account = await this.getAccountByEmail(
+      sendVerificationEmailDto.role,
+      sendVerificationEmailDto.email,
+    );
+    if (account !== null) {
       throw new ErrorCodeHttpException(
-        'User with this email already exists',
+        'Account with this email already exists',
         AuthErrorCode.EmailDuplicate,
         HttpStatus.BAD_REQUEST,
       );
@@ -343,10 +351,39 @@ export class AuthService {
     return bcrypt.hash(password, 10);
   }
 
-  private generateAuthToken(user: UserEntity): string {
-    return this.jwtService.sign(
-      { sub: user.userId, email: user.email },
-      { expiresIn: `${AUTH_TOKEN_EXPIRATION_DAYS}d` },
+  private getAccountId(
+    account: UserEntity | ModeratorEntity | AdminEntity,
+  ): number {
+    let id: number;
+    if (account instanceof UserEntity) {
+      id = account.userId;
+    } else if (account instanceof ModeratorEntity) {
+      id = account.moderatorId;
+    } else {
+      id = account.adminId;
+    }
+    return id;
+  }
+
+  private generateAuthToken(
+    role: Role,
+    account: UserEntity | ModeratorEntity | AdminEntity,
+  ): string {
+    return this.generateJwtToken(
+      role,
+      account,
+      `${AUTH_TOKEN_EXPIRATION_DAYS}d`,
+    );
+  }
+
+  private generateResetPasswordToken(
+    role: Role,
+    account: UserEntity | ModeratorEntity | AdminEntity,
+  ): string {
+    return this.generateJwtToken(
+      role,
+      account,
+      `${PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES}m`,
     );
   }
 
@@ -355,5 +392,41 @@ export class AuthService {
       Math.random() * 10 ** VERIFICATION_CODE_LENGTH,
     );
     return randomNum.toString().padStart(VERIFICATION_CODE_LENGTH, '0');
+  }
+
+  private generateJwtToken(
+    role: Role,
+    account: UserEntity | ModeratorEntity | AdminEntity,
+    expiresIn: string,
+  ): string {
+    return this.jwtService.sign(
+      { sub: this.getAccountId(account), email: account.email, role },
+      { expiresIn },
+    );
+  }
+
+  private async getAccountByEmail(
+    role: Role,
+    email: string,
+  ): Promise<UserEntity | ModeratorEntity | AdminEntity | null> {
+    let account: UserEntity | ModeratorEntity | AdminEntity | null;
+    switch (role) {
+      case Role.User:
+        account = await this.userRepository.findOne({
+          where: { email },
+        });
+        break;
+      case Role.Moderator:
+        account = await this.moderatorRepository.findOne({
+          where: { email },
+        });
+        break;
+      case Role.Admin:
+        account = await this.adminRepository.findOne({
+          where: { email },
+        });
+        break;
+    }
+    return account;
   }
 }
