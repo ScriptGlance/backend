@@ -1,3 +1,3 @@
 export class VerificationEmailResponseDto {
-    isEmailAlreadyVerified: boolean;
+  isEmailAlreadyVerified: boolean;
 }
