@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
 import { UserEntity } from './entities/UserEntity';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto } from './dto/RegisterDto';
@@ -23,6 +23,8 @@ import { SendVerificationEmailDto } from './dto/SendVerificationEmailDto';
 import { EmailVerificationCodeEntity } from './entities/EmailVerificationCodeEntity';
 import { VerifyEmailDto } from './dto/VerifyEmailDto';
 import { VerificationEmailResponseDto } from './dto/VerificationEmailResponseDto';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
@@ -34,6 +36,8 @@ export class AuthService {
     private passwordResetTokenRepository: Repository<PasswordResetTokenEntity>,
     @InjectRepository(EmailVerificationCodeEntity)
     private emailVerificationCodeRepository: Repository<EmailVerificationCodeEntity>,
+    private emailService: EmailService,
+    private configService: ConfigService,
   ) {}
 
   async register(
@@ -113,10 +117,27 @@ export class AuthService {
     if (!user) {
       return { error: false };
     }
+
+    const existingToken = await this.passwordResetTokenRepository.findOne({
+      where: {
+        user: user,
+        expiresAt: MoreThan(new Date()),
+      },
+    });
+
+    if (existingToken) {
+      throw new ErrorCodeHttpException(
+        'A password reset token has already been issued and is still valid.',
+        AuthErrorCode.PasswordResetTokenNotExpired,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const token = this.jwtService.sign(
       { sub: user.userId, email: user.email },
       { expiresIn: `${PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES}m` },
     );
+
     const expiresAt = new Date();
     expiresAt.setMinutes(
       expiresAt.getMinutes() + PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES,
@@ -126,9 +147,42 @@ export class AuthService {
       token: token,
       expiresAt: expiresAt,
     });
+
+    const resetLink = `${this.configService.get<string>('FRONTEND_URL')}/reset-password?token=${token}`;
+
+    await this.emailService.sendEmail(
+      forgotPasswordDto.email,
+      'Відновлення паролю для ScriptGlance',
+      `
+    <html>
+      <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+        <div style="max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+          <h1 style="color: #333;">Запит на скидання паролю</h1>
+          <p style="font-size: 16px; color: #555;">
+            Ви отримали цей лист, оскільки хтось запросив скидання пароля для вашого облікового запису в ScriptGlance.
+          </p>
+          <p style="font-size: 16px; color: #555;">
+            Якщо це були ви, натисніть кнопку нижче, щоб встановити новий пароль:
+          </p>
+          <div style="text-align: center; margin-top: 20px;">
+            <a href="${resetLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; font-size: 16px;">
+              Скинути пароль
+            </a>
+          </div>
+          <p style="font-size: 14px; color: #999; margin-top: 20px;">
+            Якщо ви не робили цього запиту, просто проігноруйте цей лист.
+          </p>
+          <p style="font-size: 14px; color: #999;">
+            З найкращими побажаннями,<br/>Команда ScriptGlance
+          </p>
+        </div>
+      </body>
+    </html>
+    `,
+    );
+
     await this.passwordResetTokenRepository.save(passwordResetToken);
 
-    console.log('Password reset requested for:', forgotPasswordDto.email);
     return { error: false };
   }
 
@@ -188,6 +242,23 @@ export class AuthService {
         data: { isEmailAlreadyVerified: true },
       };
     }
+
+    const existingCode = await this.emailVerificationCodeRepository.findOne({
+      where: {
+        email: sendVerificationEmailDto.email,
+        isVerified: false,
+        expiresAt: MoreThan(new Date()),
+      },
+    });
+
+    if (existingCode) {
+      throw new ErrorCodeHttpException(
+        'The valid verification code already sent',
+        AuthErrorCode.EmailVerificationCodeNotExpired,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const expiresAt = new Date();
     expiresAt.setMinutes(
       expiresAt.getMinutes() + EMAIL_VERIFICATION_CODE_EXPIRATION_MINUTES,
@@ -198,6 +269,29 @@ export class AuthService {
       verification_code: this.generateVerificationCode(),
       isVerified: false,
     });
+    await this.emailService.sendEmail(
+      sendVerificationEmailDto.email,
+      'Код підтвердження Email від ScriptGlance',
+      `
+      <html>
+        <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+          <div style="max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+            <h1 style="color: #333;">Ласкаво просимо до ScriptGlance!</h1>
+            <p style="font-size: 16px; color: #555;">
+              Ваш код підтвердження: <strong style="color: #000;">${code.verification_code}</strong>
+            </p>
+            <p style="font-size: 16px; color: #555;">
+              Будь ласка, використайте цей код для активації вашого облікового запису.
+            </p>
+            <hr style="border: none; border-top: 1px solid #eee;" />
+            <p style="font-size: 14px; color: #999;">
+              З найкращими побажаннями,<br/>Команда ScriptGlance
+            </p>
+          </div>
+        </body>
+      </html>
+  `,
+    );
     await this.emailVerificationCodeRepository.save(code);
     return {
       error: false,
