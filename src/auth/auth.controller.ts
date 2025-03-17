@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import {Body, Controller, Get, Post, Query, Req, Res, UseGuards} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/RegisterDto';
 import { LoginDto } from './dto/LoginDto';
@@ -7,10 +7,27 @@ import { ResetPasswordDto } from './dto/ResetPasswordDto';
 import { ApiBody } from '@nestjs/swagger';
 import { VerifyEmailDto } from './dto/VerifyEmailDto';
 import { SendVerificationEmailDto } from './dto/SendVerificationEmailDto';
+import {AuthGuard} from "@nestjs/passport";
+import {TokenResponseDto} from "./dto/TokenResponseDto";
+import {StandardResponse} from "../common/interface/StandardResponse";
+import {ConfigService} from "@nestjs/config";
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService, private readonly configService: ConfigService) {}
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  async googleAuth(@Query('role') role: string) {
+    return { message: `Redirecting to Google login as ${role}` };
+  }
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  async googleAuthRedirect(@Req() req, @Res() res): Promise<StandardResponse<TokenResponseDto>>  {
+    const token = this.authService.generateAuthToken(req.user);
+    return res.redirect(`${this.configService.get<string>('SUCCESS_LOGIN_REDIRECT_URL')}?token=${token}`);
+  }
 
   @Post('register')
   @ApiBody({ type: RegisterDto })

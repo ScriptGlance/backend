@@ -10,6 +10,8 @@ import { EmailVerificationCodeEntity } from './entities/EmailVerificationCodeEnt
 import { EmailModule } from '../email/email.module';
 import { ModeratorEntity } from './entities/ModeratorEntity';
 import { AdminEntity } from './entities/AdminEntity';
+import { PassportModule } from '@nestjs/passport';
+import {GoogleStrategy} from "./google.strategy";
 
 @Module({
   imports: [
@@ -30,8 +32,9 @@ import { AdminEntity } from './entities/AdminEntity';
       inject: [ConfigService],
     }),
     EmailModule,
+    PassportModule.register({ defaultStrategy: 'google' })
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, GoogleStrategy],
 })
 export class AuthModule {}
