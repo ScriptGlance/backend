@@ -5,6 +5,8 @@ import { LoginDto } from './dto/LoginDto';
 import { ForgotPasswordDto } from './dto/ForgotPasswordDto';
 import { ResetPasswordDto } from './dto/ResetPasswordDto';
 import { ApiBody } from '@nestjs/swagger';
+import { VerifyEmailDto } from './dto/VerifyEmailDto';
+import { SendVerificationEmailDto } from './dto/SendVerificationEmailDto';
 
 @Controller('auth')
 export class AuthController {
@@ -17,22 +19,32 @@ export class AuthController {
   }
 
   @Post('login')
+  @ApiBody({ type: LoginDto })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
 
-  @Post('refresh-token')
-  async refreshToken(@Body('refreshToken') refreshToken: string) {
-    return this.authService.refreshToken(refreshToken);
-  }
-
   @Post('forgot-password')
+  @ApiBody({ type: ForgotPasswordDto })
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto);
   }
 
   @Post('reset-password')
+  @ApiBody({ type: ResetPasswordDto })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Post('send-verification-email')
+  @ApiBody({ type: SendVerificationEmailDto })
+  async sendVerificationEmail(@Body() sendVerificationEmailDto: SendVerificationEmailDto) {
+    return this.authService.sendVerificationEmail(sendVerificationEmailDto);
+  }
+
+  @Post('verify-email')
+  @ApiBody({ type: VerifyEmailDto })
+  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
+    return this.authService.verifyEmail(verifyEmailDto);
   }
 }
