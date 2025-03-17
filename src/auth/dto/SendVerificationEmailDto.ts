@@ -1,17 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, MaxLength } from 'class-validator';
 import { Role } from '../../common/enum/Role';
 
-export class ResetPasswordDto {
-  @ApiProperty({ description: 'Password reset token' })
+export class SendVerificationEmailDto {
+  @ApiProperty({ description: 'User email address' })
+  @IsEmail()
+  @MaxLength(100)
   @IsNotEmpty()
-  token: string;
-
-  @ApiProperty({ description: 'User new password' })
-  @MaxLength(255)
-  @MinLength(4)
-  @IsNotEmpty()
-  newPassword: string;
+  email: string;
 
   @ApiProperty({
     description: 'User role',
