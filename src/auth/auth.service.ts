@@ -28,7 +28,7 @@ import {ConfigService} from '@nestjs/config';
 import {ModeratorEntity} from './entities/ModeratorEntity';
 import {AdminEntity} from './entities/AdminEntity';
 import {Role} from '../common/enum/Role';
-import {GoogleAccountDto} from "./dto/GoogleAccountDto";
+import {SocialAccountDto} from "./dto/GoogleAccountDto";
 
 @Injectable()
 export class AuthService {
@@ -434,7 +434,7 @@ export class AuthService {
         return account;
     }
 
-    async validateGoogleAccount(googleAccount: GoogleAccountDto): Promise<UserEntity | ModeratorEntity | AdminEntity> {
+    async validateSocialAccount(googleAccount: SocialAccountDto): Promise<UserEntity | ModeratorEntity | AdminEntity> {
         const account = await this.getAccountByEmail(googleAccount.role, googleAccount.email);
         if (account) {
             return account
