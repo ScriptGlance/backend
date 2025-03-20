@@ -19,13 +19,24 @@ export class AuthController {
   @Get('google')
   @UseGuards(AuthGuard('google'))
   async googleAuth(@Query('role') role: string) {
-    return { message: `Redirecting to Google login as ${role}` };
   }
 
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   async googleAuthRedirect(@Req() req, @Res() res): Promise<StandardResponse<TokenResponseDto>>  {
     const token = this.authService.generateAuthToken(req.user);
+    return res.redirect(`${this.configService.get<string>('SUCCESS_LOGIN_REDIRECT_URL')}?token=${token}`);
+  }
+
+  @Get('facebook')
+  @UseGuards(AuthGuard('facebook'))
+  async facebookAuth() {
+  }
+
+  @Get('facebook/callback')
+  @UseGuards(AuthGuard('facebook'))
+  async facebookAuthRedirect(@Req() req, @Res() res) {
+    const token = req.user.accessToken;
     return res.redirect(`${this.configService.get<string>('SUCCESS_LOGIN_REDIRECT_URL')}?token=${token}`);
   }
 

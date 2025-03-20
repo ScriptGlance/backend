@@ -2,7 +2,7 @@ import {Injectable, Logger} from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback } from 'passport-google-oauth20';
 import { ConfigService } from '@nestjs/config';
-import {GoogleAccountDto} from "./dto/GoogleAccountDto";
+import {SocialAccountDto} from "./dto/GoogleAccountDto";
 import {Role} from "../common/enum/Role";
 import {AuthService} from "./auth.service";
 
@@ -28,7 +28,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         const {name, emails, photos} = profile;
         const role: Role = request.query.role || Role.User;
 
-        const user: GoogleAccountDto = {
+        const user: SocialAccountDto = {
             email: emails[0].value,
             firstName: `${name.givenName}`,
             lastName: `${name.familyName}`,
@@ -38,7 +38,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
             role,
         };
 
-        const validatedUser = await this.authService.validateGoogleAccount(user);
+        const validatedUser = await this.authService.validateSocialAccount(user);
         done(null, validatedUser);
     }
 }

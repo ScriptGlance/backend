@@ -12,6 +12,7 @@ import { ModeratorEntity } from './entities/ModeratorEntity';
 import { AdminEntity } from './entities/AdminEntity';
 import { PassportModule } from '@nestjs/passport';
 import {GoogleStrategy} from "./google.strategy";
+import { FacebookStrategy } from './facebook.strategy';
 
 @Module({
   imports: [
@@ -35,6 +36,6 @@ import {GoogleStrategy} from "./google.strategy";
     PassportModule.register({ defaultStrategy: 'google' })
   ],
   controllers: [AuthController],
-  providers: [AuthService, GoogleStrategy],
+  providers: [AuthService, GoogleStrategy, FacebookStrategy],
 })
 export class AuthModule {}

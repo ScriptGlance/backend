@@ -1,6 +1,6 @@
 import {Role} from "../../common/enum/Role";
 
-export class GoogleAccountDto {
+export class SocialAccountDto {
     email: string;
     firstName: string;
     lastName: string;
