@@ -1,15 +1,18 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-@Entity('admin')
-export class AdminEntity {
-  @PrimaryGeneratedColumn({ name: 'admin_id' })
-  adminId: number;
+@Entity('moderator')
+export class ModeratorEntity {
+  @PrimaryGeneratedColumn({ name: 'moderator_id' })
+  moderatorId: number;
 
   @Column({ name: 'first_name', length: 100 })
   firstName: string;
 
   @Column({ name: 'last_name', length: 100 })
   lastName: string;
+
+  @Column({ name: 'avatar', nullable: true })
+  avatar?: string;
 
   @Column({ name: 'password', length: 255 })
   password: string;

@@ -1,5 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
-import { TariffPlan } from '../../common/enum/TariffPlan';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { ParticipantEntity } from './ParticipantEntity';
 
 @Entity('user')
 export class UserEntity {
@@ -18,15 +18,11 @@ export class UserEntity {
   @Column({ name: 'email', unique: true, length: 100 })
   email: string;
 
-  @Column({ name: 'photo_url', nullable: true })
-  photoUrl?: string;
+  @Column({ name: 'avatar', nullable: true })
+  avatar?: string;
 
-  @Column({
-    type: 'enum',
-    enum: TariffPlan,
-    default: TariffPlan.BASIC,
-  })
-  plan: TariffPlan;
+  @Column({ name: 'is_temporary_password', default: false })
+  isTemporaryPassword: boolean;
 
   @Column({ name: 'google_id', nullable: true })
   googleId?: string;
@@ -39,4 +35,10 @@ export class UserEntity {
 
   @Column({ name: 'access_token', nullable: true })
   accessToken?: string;
+
+  @Column({ name: 'deleted_at', nullable: true })
+  deletedAt?: Date;
+
+  @OneToMany(() => ParticipantEntity, (participant) => participant.user)
+  participations: ParticipantEntity[];
 }

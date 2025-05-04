@@ -4,11 +4,15 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { UserEntity } from './auth/entities/UserEntity';
-import { ModeratorEntity } from './auth/entities/ModeratorEntity';
-import { AdminEntity } from './auth/entities/AdminEntity';
-import { PasswordResetTokenEntity } from './auth/entities/PasswordResetTokenEntity';
-import { EmailVerificationCodeEntity } from './auth/entities/EmailVerificationCodeEntity';
+import { UserEntity } from './common/entities/UserEntity';
+import { ModeratorEntity } from './common/entities/ModeratorEntity';
+import { AdminEntity } from './common/entities/AdminEntity';
+import { PasswordResetTokenEntity } from './common/entities/PasswordResetTokenEntity';
+import { EmailVerificationCodeEntity } from './common/entities/EmailVerificationCodeEntity';
+import { InvitationEntity } from './common/entities/InvitationEntity';
+import { ParticipantEntity } from './common/entities/ParticipantEntity';
+import { PresentationEntity } from './common/entities/PresentationEntity';
+import { PresentationPartEntity } from './common/entities/PresentationPartEntity';
 import { EmailModule } from './email/email.module';
 
 @Module({
@@ -32,6 +36,10 @@ import { EmailModule } from './email/email.module';
           AdminEntity,
           PasswordResetTokenEntity,
           EmailVerificationCodeEntity,
+          InvitationEntity,
+          ParticipantEntity,
+          PresentationEntity,
+          PresentationPartEntity,
         ],
         synchronize: configService.get<boolean>('DEBUG'),
       }),
