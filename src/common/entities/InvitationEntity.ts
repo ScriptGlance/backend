@@ -16,7 +16,7 @@ export class InvitationEntity {
   @Column({ name: 'presentation_id' })
   presentationId: number;
 
-  @Column({ name: 'code', length: 200 })
+  @Column({ name: 'code', length: 200, unique: true })
   code: string;
 
   @CreateDateColumn({ name: 'created_at' })

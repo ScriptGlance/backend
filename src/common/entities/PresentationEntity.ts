@@ -6,7 +6,7 @@ import {
   UpdateDateColumn,
   OneToMany,
   OneToOne,
-  JoinColumn,
+  JoinColumn, DeleteDateColumn,
 } from 'typeorm';
 import { ParticipantEntity } from './ParticipantEntity';
 import { PresentationPartEntity } from './PresentationPartEntity';
@@ -20,8 +20,8 @@ export class PresentationEntity {
   @Column({ name: 'name', length: 1000 })
   name: string;
 
-  @Column({ name: 'owner_participant_id' })
-  ownerParticipantId: number;
+  @Column({ name: 'owner_participant_id', nullable: true })
+  ownerParticipantId?: number;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
@@ -29,7 +29,7 @@ export class PresentationEntity {
   @UpdateDateColumn({ name: 'modified_at' })
   modifiedAt: Date;
 
-  @Column({ name: 'deleted_at', nullable: true, default: null })
+  @DeleteDateColumn({ name: 'deleted_at', nullable: true, default: null })
   deletedAt?: Date;
 
   @OneToMany(() => ParticipantEntity, (participant) => participant.presentation)

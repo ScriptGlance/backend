@@ -14,6 +14,10 @@ import { ParticipantEntity } from './common/entities/ParticipantEntity';
 import { PresentationEntity } from './common/entities/PresentationEntity';
 import { PresentationPartEntity } from './common/entities/PresentationPartEntity';
 import { EmailModule } from './email/email.module';
+import { PresentationsModule } from './presentations/presentations.module';
+import { UserWithPremiumEntity } from './common/entities/UserWithPremiumEntity';
+import { SubscriptionEntity } from './common/entities/SubscriptionEntity';
+import { dataSourceOptions } from '../data-source';
 
 @Module({
   imports: [
@@ -21,32 +25,10 @@ import { EmailModule } from './email/email.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_NAME'),
-        entities: [
-          UserEntity,
-          ModeratorEntity,
-          AdminEntity,
-          PasswordResetTokenEntity,
-          EmailVerificationCodeEntity,
-          InvitationEntity,
-          ParticipantEntity,
-          PresentationEntity,
-          PresentationPartEntity,
-        ],
-        synchronize: configService.get<boolean>('DEBUG'),
-      }),
-      inject: [ConfigService],
-    }),
+    TypeOrmModule.forRoot(dataSourceOptions),
     AuthModule,
     EmailModule,
+    PresentationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
