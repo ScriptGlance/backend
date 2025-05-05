@@ -13,7 +13,7 @@ import { RegisterDto } from './dto/RegisterDto';
 import { LoginDto } from './dto/LoginDto';
 import { ForgotPasswordDto } from './dto/ForgotPasswordDto';
 import { ResetPasswordDto } from './dto/ResetPasswordDto';
-import { ApiBody } from '@nestjs/swagger';
+import { ApiBody, ApiResponse } from '@nestjs/swagger';
 import { VerifyEmailDto } from './dto/VerifyEmailDto';
 import { SendVerificationEmailDto } from './dto/SendVerificationEmailDto';
 import { AuthGuard } from '@nestjs/passport';
@@ -59,6 +59,7 @@ export class AuthController {
 
   @Post('register')
   @ApiBody({ type: RegisterDto })
+
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }

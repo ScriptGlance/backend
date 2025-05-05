@@ -1,5 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  OneToOne,
+} from 'typeorm';
 import { ParticipantEntity } from './ParticipantEntity';
+import { SubscriptionEntity } from './SubscriptionEntity';
+import { UserWithPremiumEntity } from './UserWithPremiumEntity';
 
 @Entity('user')
 export class UserEntity {
@@ -41,4 +49,9 @@ export class UserEntity {
 
   @OneToMany(() => ParticipantEntity, (participant) => participant.user)
   participations: ParticipantEntity[];
+
+  @OneToOne(() => SubscriptionEntity, (sub) => sub.user)
+  subscription: SubscriptionEntity;
+
+  userPremium?: UserWithPremiumEntity;
 }

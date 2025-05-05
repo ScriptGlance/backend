@@ -20,13 +20,16 @@ async function bootstrap() {
     .setTitle('My API')
     .setDescription('API documentation')
     .setVersion('1.0')
-    // Optionally add authentication support or other options:
-    // .addBearerAuth()
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
 
-  SwaggerModule.setup('docs', app, document);
+  SwaggerModule.setup('docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
 
   const configService = app.get(ConfigService);
 
@@ -40,4 +43,5 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT ?? 3000);
 }
+
 bootstrap();
