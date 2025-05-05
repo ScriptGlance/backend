@@ -7,6 +7,9 @@ import { PresentationEntity } from '../common/entities/PresentationEntity';
 import { PresentationDto } from './dto/PresentationDto';
 import { InvitationEntity } from '../common/entities/InvitationEntity';
 import { InvitationDto } from './dto/InvitationDto';
+import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
+import { StructureItemDto } from './dto/StructureItemDto';
+import { PartDto } from './dto/PartDto';
 
 @Injectable()
 export class PresentationMapper {
@@ -45,6 +48,29 @@ export class PresentationMapper {
   toInvitationDto(invitation: InvitationEntity): InvitationDto {
     return {
       invitation_code: invitation.code,
+    };
+  }
+
+  toStructureItemDto(
+    part: PresentationPartEntity,
+    wordsCount: number,
+  ): StructureItemDto {
+    return {
+      part_name: part.name,
+      part_order: part.order,
+      words_count: wordsCount,
+      text_preview: part.text.slice(0, 100),
+      assignee: this.toUserDto(part.assignee.user),
+    };
+  }
+
+  toPartDto(part: PresentationPartEntity): PartDto {
+    return {
+      part_id: part.presentationPartId,
+      part_name: part.name,
+      part_text: part.text,
+      part_order: part.order,
+      assignee_participant_id: part.assigneeParticipantId,
     };
   }
 }

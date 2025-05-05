@@ -1,24 +1,36 @@
-import {ForbiddenException, Injectable, NotFoundException,} from '@nestjs/common';
-import {InjectRepository} from '@nestjs/typeorm';
-import {Repository} from 'typeorm';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
-import {PresentationEntity} from '../common/entities/PresentationEntity';
-import {ParticipantEntity} from '../common/entities/ParticipantEntity';
-import {InvitationEntity} from '../common/entities/InvitationEntity';
-import {DEFAULT_PRESENTATION_NAME} from '../common/Constants';
+import { PresentationEntity } from '../common/entities/PresentationEntity';
+import { ParticipantEntity } from '../common/entities/ParticipantEntity';
+import { InvitationEntity } from '../common/entities/InvitationEntity';
+import {
+  DEFAULT_PRESENTATION_NAME,
+  DEFAULT_PRESENTATION_PART_NAME,
+} from '../common/Constants';
 
-import {UpdatePresentationDto} from './dto/UpdatePresentationDto';
-import {ParticipantDto} from './dto/ParticipantDto';
-import {PresentationDto} from './dto/PresentationDto';
-import {PresentationStatsResponseDto} from './dto/PresentationStatsResponseDto';
-import {StandardResponse} from '../common/interface/StandardResponse';
-import {randomBytes} from 'crypto';
-import {ColorService} from './color.service';
-import {UserWithPremiumEntity} from '../common/entities/UserWithPremiumEntity';
-import {PresentationMapper} from './presentaion.mapper';
-import {InvitationDto} from './dto/InvitationDto';
-import {PresentationGateway} from "./presentations.gateway";
-import {PresentationEventType} from "../common/enum/PresentationEventType";
+import { UpdatePresentationDto } from './dto/UpdatePresentationDto';
+import { ParticipantDto } from './dto/ParticipantDto';
+import { PresentationDto } from './dto/PresentationDto';
+import { PresentationStatsResponseDto } from './dto/PresentationStatsResponseDto';
+import { StandardResponse } from '../common/interface/StandardResponse';
+import { randomBytes } from 'crypto';
+import { ColorService } from './color.service';
+import { UserWithPremiumEntity } from '../common/entities/UserWithPremiumEntity';
+import { PresentationMapper } from './presentations.mapper';
+import { InvitationDto } from './dto/InvitationDto';
+import { PresentationGateway } from './presentations.gateway';
+import { PresentationEventType } from '../common/enum/PresentationEventType';
+import { StructureResponseDto } from './dto/StructureResponseDto';
+import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
+import { PartDto } from './dto/PartDto';
+import { PartCreateDto } from './dto/PartCreateDto';
+import { PartUpdateDto } from './dto/PartUpdateDto';
 
 @Injectable()
 export class PresentationsService {
@@ -29,12 +41,16 @@ export class PresentationsService {
     private readonly participantRepository: Repository<ParticipantEntity>,
     @InjectRepository(InvitationEntity)
     private readonly invitationRepository: Repository<InvitationEntity>,
+    @InjectRepository(PresentationPartEntity)
+    private readonly presentationPartRepository: Repository<PresentationPartEntity>,
     private readonly colorService: ColorService,
     private readonly presentationsMapper: PresentationMapper,
     private readonly presentationsGateway: PresentationGateway,
   ) {}
 
-  async createPresentation(userId: number): Promise<StandardResponse<PresentationDto>> {
+  async createPresentation(
+    userId: number,
+  ): Promise<StandardResponse<PresentationDto>> {
     const presentation = this.presentationRepository.create({
       name: DEFAULT_PRESENTATION_NAME,
     });
@@ -169,7 +185,10 @@ export class PresentationsService {
     }
     Object.assign(presentation, dto);
     await this.presentationRepository.save(presentation);
-    this.presentationsGateway.emitPresentationEvent(id, PresentationEventType.NameChanged)
+    this.presentationsGateway.emitPresentationEvent(
+      id,
+      PresentationEventType.NameChanged,
+    );
     return {
       data: this.presentationsMapper.toPresentationDto(
         await this.findOneById(id, userId),
@@ -178,7 +197,10 @@ export class PresentationsService {
     };
   }
 
-  async removePresentation(userId: number, id: number): Promise<StandardResponse<any>> {
+  async removePresentation(
+    userId: number,
+    id: number,
+  ): Promise<StandardResponse<any>> {
     const presentation = await this.findOneById(id, userId);
     if (presentation.owner.userId !== userId) {
       throw new ForbiddenException(
@@ -245,7 +267,10 @@ export class PresentationsService {
       );
     }
     await this.participantRepository.remove(participant);
-    this.presentationsGateway.emitPresentationEvent(presentationId!, PresentationEventType.ParticipantsChanged)
+    this.presentationsGateway.emitPresentationEvent(
+      presentationId!,
+      PresentationEventType.ParticipantsChanged,
+    );
     return {
       error: false,
     };
@@ -311,7 +336,207 @@ export class PresentationsService {
       ),
     });
     await this.participantRepository.save(part);
-    this.presentationsGateway.emitPresentationEvent(invitation.presentation.presentationId, PresentationEventType.ParticipantsChanged)
+    this.presentationsGateway.emitPresentationEvent(
+      invitation.presentation.presentationId,
+      PresentationEventType.ParticipantsChanged,
+    );
+    return {
+      error: false,
+    };
+  }
+
+  async getStructure(
+    userId: number,
+    presentationId: number,
+  ): Promise<StandardResponse<StructureResponseDto>> {
+    await this.findOneById(presentationId, userId);
+    const parts = await this.presentationPartRepository.find({
+      where: { presentationId },
+      relations: ['assignee', 'assignee.user'],
+      order: { order: 'ASC' },
+    });
+
+    let totalWords = 0;
+    const structure = parts.map((p) => {
+      const words = p.text
+        .trim()
+        .split(/\s+/)
+        .filter((w) => w.length > 0).length;
+      totalWords += words;
+      return this.presentationsMapper.toStructureItemDto(p, words);
+    });
+
+    return {
+      data: { total_words_count: totalWords, structure },
+      error: false,
+    };
+  }
+
+  async listParts(
+    userId: number,
+    presentationId: number,
+  ): Promise<StandardResponse<PartDto[]>> {
+    await this.findOneById(presentationId, userId);
+    const parts = await this.presentationPartRepository.find({
+      where: { presentationId },
+      order: { order: 'ASC' },
+    });
+    return {
+      data: parts.map((p) => this.presentationsMapper.toPartDto(p)),
+      error: false,
+    };
+  }
+
+  async createPart(
+    userId: number,
+    presentationId: number,
+    data: PartCreateDto,
+  ): Promise<StandardResponse<PartDto>> {
+    await this.findOneById(presentationId, userId);
+    const presentation = await this.findOneById(presentationId, userId);
+    const participant = await this.participantRepository.findOneBy({
+      user: { userId },
+      presentation: { presentationId },
+    });
+    if (!participant) {
+      throw new NotFoundException('Owner participant not found');
+    }
+    // if (presentation.isActive) { TODO: check if presentation is active
+    //   throw new ConflictException('presentation is currently launched');
+    // }
+
+    await this.presentationPartRepository
+      .createQueryBuilder()
+      .update(PresentationPartEntity)
+      .set({ order: () => `"order" + 1` })
+      .where('"presentation_id" = :pid AND "order" >= :ord', {
+        pid: presentationId,
+        ord: data.part_order,
+      })
+      .execute();
+
+    const part = this.presentationPartRepository.create({
+      presentation: presentation,
+      order: data.part_order,
+      name: DEFAULT_PRESENTATION_PART_NAME,
+      text: '',
+      assignee: participant,
+    });
+    await this.presentationPartRepository.save(part);
+
+    this.presentationsGateway.emitPresentationEvent(
+      presentationId,
+      PresentationEventType.TextChanged,
+    );
+
+    return {
+      data: this.presentationsMapper.toPartDto(part),
+      error: false,
+    };
+  }
+
+  async updatePart(
+    userId: number,
+    partId: number,
+    data: PartUpdateDto,
+  ): Promise<StandardResponse<PartDto>> {
+    const part = await this.presentationPartRepository.findOne({
+      where: { presentationPartId: partId },
+      relations: ['presentation'],
+    });
+    if (!part) {
+      throw new NotFoundException(`Part ${partId} not found`);
+    }
+    await this.findOneById(part.presentation.presentationId, userId);
+    // if (part.presentation.isActive) { TODO: check if presentation is active
+    //   throw new ConflictException(
+    //     'cannot update part while presentation active',
+    //   );
+    // }
+
+    if (data.part_order !== undefined && data.part_order !== part.order) {
+      const oldOrder = part.order;
+      const newOrder = data.part_order;
+      const presentationId = part.presentation.presentationId;
+
+      if (newOrder < oldOrder) {
+        await this.presentationPartRepository
+          .createQueryBuilder()
+          .update(PresentationPartEntity)
+          .set({ order: () => `"order" + 1` })
+          .where(
+            `"presentation_id" = :pid AND "order" >= :newOrd AND "order" < :oldOrd`,
+            { pid: presentationId, newOrd: newOrder, oldOrd: oldOrder },
+          )
+          .execute();
+      } else {
+        await this.presentationPartRepository
+          .createQueryBuilder()
+          .update(PresentationPartEntity)
+          .set({ order: () => `"order" - 1` })
+          .where(
+            `"presentation_id" = :pid AND "order" > :oldOrd AND "order" <= :newOrd`,
+            { pid: presentationId, oldOrd: oldOrder, newOrd: newOrder },
+          )
+          .execute();
+      }
+      part.order = newOrder;
+    }
+
+    if (data.part_assignee_participant_id !== undefined) {
+      part.assigneeParticipantId = data.part_assignee_participant_id;
+    }
+
+    await this.presentationPartRepository.save(part);
+
+    this.presentationsGateway.emitPresentationEvent(
+      part.presentation.presentationId,
+      PresentationEventType.TextChanged,
+    );
+
+    return {
+      data: this.presentationsMapper.toPartDto(part),
+      error: false,
+    };
+  }
+
+  async deletePart(
+    userId: number,
+    partId: number,
+  ): Promise<StandardResponse<any>> {
+    const part = await this.presentationPartRepository.findOne({
+      where: { presentationPartId: partId },
+      relations: ['presentation'],
+    });
+    if (!part) {
+      throw new NotFoundException(`Part ${partId} not found`);
+    }
+    await this.findOneById(part.presentation.presentationId, userId);
+    // if (part.presentation.isActive) { TODO: check if presentation is active
+    //   throw new ConflictException(
+    //     'cannot delete part while presentation active',
+    //   );
+    // }
+
+    const presentationId = part.presentation.presentationId;
+    const oldOrder = part.order;
+
+    await this.presentationPartRepository.remove(part);
+
+    await this.presentationPartRepository
+      .createQueryBuilder()
+      .update(PresentationPartEntity)
+      .set({ order: () => `"order" - 1` })
+      .where(`"presentation_id" = :pid AND "order" > :oldOrd`, {
+        pid: presentationId,
+        oldOrd: oldOrder,
+      })
+      .execute();
+
+    this.presentationsGateway.emitPresentationEvent(
+      presentationId,
+      PresentationEventType.TextChanged,
+    );
     return {
       error: false,
     };
