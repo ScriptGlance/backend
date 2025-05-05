@@ -26,50 +26,50 @@ export class PresentationsController {
   constructor(private readonly service: PresentationsService) {}
 
   @Post()
-  async create(@GetUser('id') userId: number) {
-    return { data: await this.service.create(userId) };
+  async createPresentation(@GetUser('id') userId: number) {
+    return { data: await this.service.createPresentation(userId) };
   }
 
   @Get('stats')
-  async stats(@GetUser('id') userId: number) {
-    return { data: await this.service.getStats(userId) };
+  async getPresentationStatistics(@GetUser('id') userId: number) {
+    return { data: await this.service.getPresentationStatistics(userId) };
   }
 
   @Get()
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'offset', required: false, type: Number })
-  async list(
+  async getPresentations(
     @GetUser('id') userId: number,
     @Query('limit', ParseIntPipe) limit = 10,
     @Query('offset', ParseIntPipe) offset = 0,
   ) {
-    const result = await this.service.findAll(userId, limit, offset);
+    const result = await this.service.getPresentations(userId, limit, offset);
     return { data: result };
   }
 
   @Get(':id')
-  async findOne(
+  async getPresentation(
     @GetUser('id') userId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return { data: await this.service.findOne(userId, id) };
+    return { data: await this.service.getPresentation(userId, id) };
   }
 
   @Put(':id')
-  async update(
+  async updatePresentation(
     @GetUser('id') userId: number,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdatePresentationDto,
   ) {
-    return { data: await this.service.update(userId, id, dto) };
+    return { data: await this.service.updatePresentation(userId, id, dto) };
   }
 
   @Delete(':id')
-  async remove(
+  async removePresentation(
     @GetUser('id') userId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    await this.service.remove(userId, id);
+    await this.service.removePresentation(userId, id);
   }
 
   @Get(':id/participants')
@@ -77,7 +77,7 @@ export class PresentationsController {
     @GetUser('id') userId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return await this.service.listParticipants(userId, id);
+    return await this.service.getParticipants(userId, id);
   }
 
   @Delete('participants/:id')
@@ -85,19 +85,19 @@ export class PresentationsController {
     @GetUser('id') userId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    await this.service.removeParticipant(userId, id);
+    return await this.service.removeParticipant(userId, id);
   }
 
   @Post(':id/invite')
-  async invite(
+  async inviteParticipant(
     @GetUser('id') userId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return { data: { invitationId: await this.service.invite(userId, id) } };
+    return { data: { invitationId: await this.service.inviteParticipant(userId, id) } };
   }
 
   @Post('invitations/:token/accept')
-  async accept(@GetUser('id') userId: number, @Param('token') token: string) {
+  async acceptInvitation(@GetUser('id') userId: number, @Param('token') token: string) {
     await this.service.acceptInvitation(userId, token);
   }
 }

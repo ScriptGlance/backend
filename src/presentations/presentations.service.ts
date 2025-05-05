@@ -1,26 +1,24 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import {ForbiddenException, Injectable, NotFoundException,} from '@nestjs/common';
+import {InjectRepository} from '@nestjs/typeorm';
+import {Repository} from 'typeorm';
 
-import { PresentationEntity } from '../common/entities/PresentationEntity';
-import { ParticipantEntity } from '../common/entities/ParticipantEntity';
-import { InvitationEntity } from '../common/entities/InvitationEntity';
-import { DEFAULT_PRESENTATION_NAME } from '../common/Constants';
+import {PresentationEntity} from '../common/entities/PresentationEntity';
+import {ParticipantEntity} from '../common/entities/ParticipantEntity';
+import {InvitationEntity} from '../common/entities/InvitationEntity';
+import {DEFAULT_PRESENTATION_NAME} from '../common/Constants';
 
-import { UpdatePresentationDto } from './dto/UpdatePresentationDto';
-import { ParticipantDto } from './dto/ParticipantDto';
-import { PresentationDto } from './dto/PresentationDto';
-import { PresentationStatsResponseDto } from './dto/PresentationStatsResponseDto';
-import { StandardResponse } from '../common/interface/StandardResponse';
-import { randomBytes } from 'crypto';
-import { ColorService } from './color.service';
-import { UserWithPremiumEntity } from '../common/entities/UserWithPremiumEntity';
-import { PresentationMapper } from './presentaion.mapper';
-import { InvitationDto } from './dto/InvitationDto';
+import {UpdatePresentationDto} from './dto/UpdatePresentationDto';
+import {ParticipantDto} from './dto/ParticipantDto';
+import {PresentationDto} from './dto/PresentationDto';
+import {PresentationStatsResponseDto} from './dto/PresentationStatsResponseDto';
+import {StandardResponse} from '../common/interface/StandardResponse';
+import {randomBytes} from 'crypto';
+import {ColorService} from './color.service';
+import {UserWithPremiumEntity} from '../common/entities/UserWithPremiumEntity';
+import {PresentationMapper} from './presentaion.mapper';
+import {InvitationDto} from './dto/InvitationDto';
+import {PresentationGateway} from "./presentations.gateway";
+import {PresentationEventType} from "../common/enum/PresentationEventType";
 
 @Injectable()
 export class PresentationsService {
@@ -33,9 +31,10 @@ export class PresentationsService {
     private readonly invitationRepository: Repository<InvitationEntity>,
     private readonly colorService: ColorService,
     private readonly presentationsMapper: PresentationMapper,
+    private readonly presentationsGateway: PresentationGateway,
   ) {}
 
-  async create(userId: number): Promise<StandardResponse<PresentationDto>> {
+  async createPresentation(userId: number): Promise<StandardResponse<PresentationDto>> {
     const presentation = this.presentationRepository.create({
       name: DEFAULT_PRESENTATION_NAME,
     });
@@ -61,7 +60,7 @@ export class PresentationsService {
     };
   }
 
-  async getStats(
+  async getPresentationStatistics(
     userId: number,
   ): Promise<StandardResponse<PresentationStatsResponseDto>> {
     const presentationCount = await this.presentationRepository.count({
@@ -88,7 +87,7 @@ export class PresentationsService {
     };
   }
 
-  async findAll(
+  async getPresentations(
     userId: number,
     limit: number,
     offset: number,
@@ -124,7 +123,7 @@ export class PresentationsService {
     };
   }
 
-  private async findOneById(
+  public async findOneById(
     id: number,
     userId: number,
   ): Promise<PresentationEntity> {
@@ -146,7 +145,7 @@ export class PresentationsService {
     return presentation;
   }
 
-  async findOne(
+  async getPresentation(
     userId: number,
     id: number,
   ): Promise<StandardResponse<PresentationDto>> {
@@ -157,7 +156,7 @@ export class PresentationsService {
     };
   }
 
-  async update(
+  async updatePresentation(
     userId: number,
     id: number,
     dto: UpdatePresentationDto,
@@ -170,6 +169,7 @@ export class PresentationsService {
     }
     Object.assign(presentation, dto);
     await this.presentationRepository.save(presentation);
+    this.presentationsGateway.emitPresentationEvent(id, PresentationEventType.NameChanged)
     return {
       data: this.presentationsMapper.toPresentationDto(
         await this.findOneById(id, userId),
@@ -178,7 +178,7 @@ export class PresentationsService {
     };
   }
 
-  async remove(userId: number, id: number): Promise<StandardResponse<any>> {
+  async removePresentation(userId: number, id: number): Promise<StandardResponse<any>> {
     const presentation = await this.findOneById(id, userId);
     if (presentation.owner.userId !== userId) {
       throw new ForbiddenException(
@@ -191,7 +191,7 @@ export class PresentationsService {
     };
   }
 
-  async listParticipants(
+  async getParticipants(
     userId: number,
     id: number,
   ): Promise<StandardResponse<ParticipantDto[]>> {
@@ -245,12 +245,13 @@ export class PresentationsService {
       );
     }
     await this.participantRepository.remove(participant);
+    this.presentationsGateway.emitPresentationEvent(presentationId!, PresentationEventType.ParticipantsChanged)
     return {
       error: false,
     };
   }
 
-  async invite(
+  async inviteParticipant(
     userId: number,
     id: number,
   ): Promise<StandardResponse<InvitationDto>> {
@@ -310,7 +311,7 @@ export class PresentationsService {
       ),
     });
     await this.participantRepository.save(part);
-
+    this.presentationsGateway.emitPresentationEvent(invitation.presentation.presentationId, PresentationEventType.ParticipantsChanged)
     return {
       error: false,
     };

@@ -9,6 +9,7 @@ import { InvitationEntity } from '../common/entities/InvitationEntity';
 import { AuthModule } from '../auth/auth.module';
 import { ColorService } from './color.service';
 import { PresentationMapper } from './presentaion.mapper';
+import {PresentationGateway} from "./presentations.gateway";
 
 @Module({
   imports: [
@@ -20,6 +21,6 @@ import { PresentationMapper } from './presentaion.mapper';
     AuthModule,
   ],
   controllers: [PresentationsController],
-  providers: [PresentationsService, ColorService, PresentationMapper],
+  providers: [PresentationsService, ColorService, PresentationMapper, PresentationGateway],
 })
 export class PresentationsModule {}
