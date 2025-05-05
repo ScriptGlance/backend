@@ -7,15 +7,24 @@ import {
   Param,
   Body,
   ParseIntPipe,
-  UseGuards, Query,
+  UseGuards,
+  Query,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { PresentationsService } from './presentations.service';
 import { Roles } from '../auth/roles.decorator';
 import { GetUser } from '../common/decorators/get-user.decorator';
 import { UpdatePresentationDto } from './dto/UpdatePresentationDto';
 import { RolesGuard } from '../auth/roles.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PartUpdateDto } from './dto/PartUpdateDto';
+import { PartCreateDto } from './dto/PartCreateDto';
 
 @ApiTags('Presentations')
 @ApiBearerAuth()
@@ -93,11 +102,63 @@ export class PresentationsController {
     @GetUser('id') userId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return { data: { invitationId: await this.service.inviteParticipant(userId, id) } };
+    return {
+      data: { invitationId: await this.service.inviteParticipant(userId, id) },
+    };
   }
 
   @Post('invitations/:token/accept')
-  async acceptInvitation(@GetUser('id') userId: number, @Param('token') token: string) {
+  async acceptInvitation(
+    @GetUser('id') userId: number,
+    @Param('token') token: string,
+  ) {
     await this.service.acceptInvitation(userId, token);
+  }
+
+  @Get(':id/structure')
+  @ApiOperation({ summary: 'Retrieve presentation structure' })
+  async getStructure(
+    @GetUser('id') userId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return await this.service.getStructure(userId, id);
+  }
+
+  @Get(':id/parts')
+  @ApiOperation({ summary: 'List all parts' })
+  async listParts(
+    @GetUser('id') userId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return await this.service.listParts(userId, id);
+  }
+
+  @Post(':id/parts')
+  @ApiOperation({ summary: 'Create a new part' })
+  async createPart(
+    @GetUser('id') userId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: PartCreateDto,
+  ) {
+    return await this.service.createPart(userId, id, dto);
+  }
+
+  @Put('parts/:part_id')
+  @ApiOperation({ summary: 'Update part' })
+  async updatePart(
+    @GetUser('id') userId: number,
+    @Param('part_id', ParseIntPipe) partId: number,
+    @Body() dto: PartUpdateDto,
+  ) {
+    return this.service.updatePart(userId, partId, dto);
+  }
+
+  @Delete('parts/:part_id')
+  @ApiOperation({ summary: 'Delete a part' })
+  async deletePart(
+    @GetUser('id') userId: number,
+    @Param('part_id', ParseIntPipe) partId: number,
+  ) {
+    return await this.service.deletePart(userId, partId);
   }
 }

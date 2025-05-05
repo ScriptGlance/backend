@@ -3,4 +3,5 @@ export const AUTH_TOKEN_EXPIRATION_DAYS = 7;
 export const EMAIL_VERIFICATION_CODE_EXPIRATION_MINUTES = 10;
 export const VERIFICATION_CODE_LENGTH = 6;
 export const DEFAULT_PRESENTATION_NAME = 'Виступ без назви';
+export const DEFAULT_PRESENTATION_PART_NAME = 'Частина без назви';
 export const GOLDEN_RATIO = 0.618033988749895;
