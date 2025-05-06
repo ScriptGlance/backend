@@ -3,27 +3,21 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { UserEntity } from './common/entities/UserEntity';
-import { ModeratorEntity } from './common/entities/ModeratorEntity';
-import { AdminEntity } from './common/entities/AdminEntity';
-import { PasswordResetTokenEntity } from './common/entities/PasswordResetTokenEntity';
-import { EmailVerificationCodeEntity } from './common/entities/EmailVerificationCodeEntity';
-import { InvitationEntity } from './common/entities/InvitationEntity';
-import { ParticipantEntity } from './common/entities/ParticipantEntity';
-import { PresentationEntity } from './common/entities/PresentationEntity';
-import { PresentationPartEntity } from './common/entities/PresentationPartEntity';
+import { ConfigModule } from '@nestjs/config';
 import { EmailModule } from './email/email.module';
 import { PresentationsModule } from './presentations/presentations.module';
-import { UserWithPremiumEntity } from './common/entities/UserWithPremiumEntity';
-import { SubscriptionEntity } from './common/entities/SubscriptionEntity';
 import { dataSourceOptions } from '../data-source';
+import { RedisModule } from '@nestjs-modules/ioredis';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+    RedisModule.forRoot({
+      type: 'single',
+      url: process.env.REDIS_URL,
     }),
     TypeOrmModule.forRoot(dataSourceOptions),
     AuthModule,

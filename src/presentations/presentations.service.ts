@@ -301,6 +301,7 @@ export class PresentationsService {
     return randomBytes(16).toString('hex');
   }
 
+  //TODO make invitation invalid after use
   async acceptInvitation(
     userId: number,
     code: string,

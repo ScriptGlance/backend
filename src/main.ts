@@ -6,7 +6,13 @@ import { StandardResponseExceptionFilter } from './common/filter/StandardRespons
 import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    cors: {
+      origin: '*',
+      credentials: true,
+      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    },
+  });
   app.useGlobalFilters(new StandardResponseExceptionFilter());
 
   app.useGlobalPipes(

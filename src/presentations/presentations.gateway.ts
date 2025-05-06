@@ -16,7 +16,6 @@ import { PresentationEntity } from '../common/entities/PresentationEntity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PresentationEventDto } from './dto/PresentationEventDto';
 import { PresentationEventType } from '../common/enum/PresentationEventType';
-import { AuthUser } from '../common/types/express';
 
 @WebSocketGateway({ cors: true })
 @Injectable()
@@ -76,7 +75,7 @@ export class PresentationGateway
       .leftJoinAndSelect('presentation.owner', 'owner')
       .leftJoinAndSelect('owner.user', 'ownerUser')
       .leftJoinAndSelect('presentation.participants', 'participant')
-      .leftJoinAndSelect('participant.user', 'participantUser')
+      .leftJoinAndSelect('participaant.user', 'participantUser')
       .where('presentation.presentationId = :id', { id: data.presentationId })
       .getOne();
 
