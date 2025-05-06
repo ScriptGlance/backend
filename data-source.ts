@@ -33,7 +33,7 @@ export const dataSourceOptions: DataSourceOptions = {
     UserWithPremiumEntity,
     SubscriptionEntity,
   ],
-  migrations: ['src/migrations/*.ts'],
+  migrations: ['dist/src/migrations/*.js'],
   synchronize: false,
 };
 

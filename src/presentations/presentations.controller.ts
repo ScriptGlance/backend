@@ -15,7 +15,6 @@ import {
   ApiBearerAuth,
   ApiQuery,
   ApiOperation,
-  ApiResponse,
 } from '@nestjs/swagger';
 import { PresentationsService } from './presentations.service';
 import { Roles } from '../auth/roles.decorator';
