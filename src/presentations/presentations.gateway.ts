@@ -75,7 +75,7 @@ export class PresentationGateway
       .leftJoinAndSelect('presentation.owner', 'owner')
       .leftJoinAndSelect('owner.user', 'ownerUser')
       .leftJoinAndSelect('presentation.participants', 'participant')
-      .leftJoinAndSelect('participaant.user', 'participantUser')
+      .leftJoinAndSelect('participant.user', 'participantUser')
       .where('presentation.presentationId = :id', { id: data.presentationId })
       .getOne();
 

@@ -160,4 +160,12 @@ export class PresentationsController {
   ) {
     return await this.service.deletePart(userId, partId);
   }
+
+  @Get(':id/text/cursor-positions')
+  async getPresentationCursorPositions(
+      @GetUser('id') userId: number,
+      @Param('id', ParseIntPipe) id: number,
+  ) {
+    return await this.service.getPresentationCursorPositions(userId, id);
+  }
 }

@@ -31,6 +31,8 @@ import { PresentationPartEntity } from '../common/entities/PresentationPartEntit
 import { PartDto } from './dto/PartDto';
 import { PartCreateDto } from './dto/PartCreateDto';
 import { PartUpdateDto } from './dto/PartUpdateDto';
+import {CursorPositionDto} from "./dto/CursorPositionDto";
+import {TextEditingGateway} from "./text-editing.gateway";
 
 @Injectable()
 export class PresentationsService {
@@ -46,6 +48,7 @@ export class PresentationsService {
     private readonly colorService: ColorService,
     private readonly presentationsMapper: PresentationMapper,
     private readonly presentationsGateway: PresentationGateway,
+    private readonly textEditingGateway: TextEditingGateway,
   ) {}
 
   async createPresentation(
@@ -541,5 +544,14 @@ export class PresentationsService {
     return {
       error: false,
     };
+  }
+
+  async getPresentationCursorPositions(userId: number, presentationId: number): Promise<StandardResponse<CursorPositionDto[]>> {
+    await this.findOneById(presentationId, userId);
+    const positions = this.textEditingGateway.getCursorPositionsForPresentation(presentationId);
+    return {
+      data: positions,
+      error: false,
+    }
   }
 }
