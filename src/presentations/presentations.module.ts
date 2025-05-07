@@ -11,7 +11,7 @@ import { ColorService } from './color.service';
 import { PresentationMapper } from './presentations.mapper';
 import { PresentationGateway } from './presentations.gateway';
 import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
-import {TextEditingGateway} from "./text-editing.gateway";
+import {PartsGateway} from "./parts.gateway";
 
 @Module({
   imports: [
@@ -29,7 +29,7 @@ import {TextEditingGateway} from "./text-editing.gateway";
     ColorService,
     PresentationMapper,
     PresentationGateway,
-    TextEditingGateway,
+    PartsGateway,
   ],
 })
 export class PresentationsModule {}
