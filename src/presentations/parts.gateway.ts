@@ -25,6 +25,9 @@ import { Mutex } from 'async-mutex';
 import { TextOperationType } from '../common/enum/TextOperationType';
 import { SocketData } from '../common/interface/SocketData';
 import { BaseGateway } from '../common/base/base.gateway';
+import { PresentationEventType } from '../common/enum/PresentationEventType';
+import { PresentationEventDto } from './dto/PresentationEventDto';
+import { PartEventDto } from './dto/PartEventDto';
 
 type Socket = BaseSocket<any, any, any, SocketData>;
 
@@ -32,7 +35,7 @@ type Socket = BaseSocket<any, any, any, SocketData>;
  * WebSocket gateway for real-time collaborative text editing
  */
 @WebSocketGateway({ cors: true })
-export class TextEditingGateway
+export class PartsGateway
   extends BaseGateway
   implements OnGatewayDisconnect, OnModuleInit, OnModuleDestroy
 {
@@ -444,5 +447,10 @@ export class TextEditingGateway
       }
     }
     return result;
+  }
+
+  public emitPartEvent(presentationId: number, event: PartEventDto) {
+    const room = this.getRoomName(presentationId);
+    this.server.to(room).emit('partEvent', event);
   }
 }

@@ -32,11 +32,13 @@ import { PartDto } from './dto/PartDto';
 import { PartCreateDto } from './dto/PartCreateDto';
 import { PartUpdateDto } from './dto/PartUpdateDto';
 import { CursorPositionDto } from './dto/CursorPositionDto';
-import { TextEditingGateway } from './text-editing.gateway';
+import { PartsGateway } from './parts.gateway';
 import { PartTarget } from '../common/enum/PartTarget';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { StructureItemDto } from './dto/StructureItemDto';
+import { PartEventDto } from './dto/PartEventDto';
+import { PartEventType } from '../common/enum/PartEventType';
 
 @Injectable()
 export class PresentationsService {
@@ -52,7 +54,7 @@ export class PresentationsService {
     private readonly colorService: ColorService,
     private readonly presentationsMapper: PresentationMapper,
     private readonly presentationsGateway: PresentationGateway,
-    private readonly textEditingGateway: TextEditingGateway,
+    private readonly partsGateway: PartsGateway,
     @InjectRedis()
     private readonly redis: Redis,
   ) {}
@@ -492,6 +494,16 @@ export class PresentationsService {
       PresentationEventType.TextChanged,
     );
 
+    this.partsGateway.emitPartEvent(
+      presentationId,
+      new PartEventDto(
+        PartEventType.PartAdded,
+        part.presentationPartId,
+        part.order,
+        participant.participantId,
+      ),
+    );
+
     return {
       data: this.presentationsMapper.toPartDto(part),
       error: false,
@@ -557,6 +569,16 @@ export class PresentationsService {
       PresentationEventType.TextChanged,
     );
 
+    this.partsGateway.emitPartEvent(
+      part.presentation.presentationId,
+      new PartEventDto(
+        PartEventType.PartUpdated,
+        part.presentationPartId,
+        part.order,
+        part.assigneeParticipantId,
+      ),
+    );
+
     return {
       data: this.presentationsMapper.toPartDto(part),
       error: false,
@@ -600,6 +622,11 @@ export class PresentationsService {
       presentationId,
       PresentationEventType.TextChanged,
     );
+
+    this.partsGateway.emitPartEvent(
+      presentationId,
+      new PartEventDto(PartEventType.PartRemoved, partId),
+    );
     return {
       error: false,
     };
@@ -611,7 +638,7 @@ export class PresentationsService {
   ): Promise<StandardResponse<CursorPositionDto[]>> {
     await this.findOneById(presentationId, userId);
     const positions =
-      this.textEditingGateway.getCursorPositionsForPresentation(presentationId);
+      this.partsGateway.getCursorPositionsForPresentation(presentationId);
     return {
       data: positions,
       error: false,
