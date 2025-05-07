@@ -79,6 +79,15 @@ export class PresentationsService {
     presentation.owner = ownerParticipant;
     await this.presentationRepository.save(presentation);
 
+    const initialPart = this.presentationPartRepository.create({
+      presentation: presentation,
+      order: 0,
+      name: DEFAULT_PRESENTATION_PART_NAME,
+      text: '',
+      assignee: ownerParticipant,
+    });
+    await this.presentationPartRepository.save(initialPart);
+
     return {
       data: this.presentationsMapper.toPresentationDto(
         await this.findOneById(presentation.presentationId, userId),
