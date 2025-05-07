@@ -1,7 +1,6 @@
 import {
   SubscribeMessage,
   WebSocketGateway,
-  OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
   MessageBody,
@@ -9,54 +8,37 @@ import {
 } from '@nestjs/websockets';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { Socket, Server } from 'socket.io';
-import { UnauthorizedException, Injectable } from '@nestjs/common';
+import { Socket as BaseSocket, Server } from 'socket.io';
+import { Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { PresentationEntity } from '../common/entities/PresentationEntity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PresentationEventDto } from './dto/PresentationEventDto';
 import { PresentationEventType } from '../common/enum/PresentationEventType';
+import { SocketData } from '../common/interface/SocketData';
+import { BaseGateway } from '../common/base/base.gateway';
+
+type Socket = BaseSocket<any, any, any, SocketData>;
 
 @WebSocketGateway({ cors: true })
 @Injectable()
 export class PresentationGateway
-  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
+  extends BaseGateway
+  implements OnGatewayDisconnect, OnGatewayInit
 {
   private server: Server;
 
   constructor(
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
+    jwtService: JwtService,
+    configService: ConfigService,
     @InjectRepository(PresentationEntity)
     private readonly presentationRepository: Repository<PresentationEntity>,
-  ) {}
+  ) {
+    super(jwtService, configService);
+  }
 
   afterInit(server: Server) {
     this.server = server;
-  }
-
-  async handleConnection(client: Socket) {
-    try {
-      const token = client.handshake.auth?.token as string | undefined;
-      if (!token) throw new UnauthorizedException();
-
-      const payload: {
-        sub: { id: number };
-        email: string;
-        role: string;
-      } = await this.jwtService.verifyAsync(token, {
-        secret: this.configService.get<string>('JWT_SECRET'),
-      });
-
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      client.data.user = {
-        id: payload.sub,
-        email: payload.email,
-        role: payload.role,
-      };
-    } catch (err) {
-      client.disconnect();
-    }
   }
 
   handleDisconnect(client: Socket) {
@@ -68,8 +50,12 @@ export class PresentationGateway
     @MessageBody() data: { presentationId: number },
     @ConnectedSocket() client: Socket,
   ) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const userId = client.data.user.id as number;
+    const userId = client.data.user?.id;
+    if (!userId) {
+      client.emit('error', 'User not authenticated');
+      return;
+    }
+
     const presentation = await this.presentationRepository
       .createQueryBuilder('presentation')
       .leftJoinAndSelect('presentation.owner', 'owner')

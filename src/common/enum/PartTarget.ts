@@ -1,4 +1,4 @@
 export enum PartTarget {
-    Title = "title",
-    Text = "text",
+  Name = 'Name',
+  Text = 'text',
 }

@@ -31,8 +31,12 @@ import { PresentationPartEntity } from '../common/entities/PresentationPartEntit
 import { PartDto } from './dto/PartDto';
 import { PartCreateDto } from './dto/PartCreateDto';
 import { PartUpdateDto } from './dto/PartUpdateDto';
-import {CursorPositionDto} from "./dto/CursorPositionDto";
-import {TextEditingGateway} from "./text-editing.gateway";
+import { CursorPositionDto } from './dto/CursorPositionDto';
+import { TextEditingGateway } from './text-editing.gateway';
+import { PartTarget } from '../common/enum/PartTarget';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
+import { StructureItemDto } from './dto/StructureItemDto';
 
 @Injectable()
 export class PresentationsService {
@@ -49,6 +53,8 @@ export class PresentationsService {
     private readonly presentationsMapper: PresentationMapper,
     private readonly presentationsGateway: PresentationGateway,
     private readonly textEditingGateway: TextEditingGateway,
+    @InjectRedis()
+    private readonly redis: Redis,
   ) {}
 
   async createPresentation(
@@ -349,6 +355,25 @@ export class PresentationsService {
     };
   }
 
+  private async getPresentationPartContent(
+    partId: number,
+    target: PartTarget,
+    fallback: string,
+  ): Promise<string> {
+    const key = `editing:part:${partId}:${target}`;
+    const raw = await this.redis.get(key);
+    if (!raw) return fallback;
+    try {
+      const { content } = JSON.parse(raw) as {
+        content: string;
+        version: number;
+      };
+      return content;
+    } catch {
+      return fallback;
+    }
+  }
+
   async getStructure(
     userId: number,
     presentationId: number,
@@ -361,14 +386,34 @@ export class PresentationsService {
     });
 
     let totalWords = 0;
-    const structure = parts.map((p) => {
-      const words = p.text
+    const structure: StructureItemDto[] = [];
+
+    for (const p of parts) {
+      const name = await this.getPresentationPartContent(
+        p.presentationPartId,
+        PartTarget.Name,
+        p.name,
+      );
+
+      const text = await this.getPresentationPartContent(
+        p.presentationPartId,
+        PartTarget.Text,
+        p.text,
+      );
+
+      const words = text
         .trim()
         .split(/\s+/)
         .filter((w) => w.length > 0).length;
       totalWords += words;
-      return this.presentationsMapper.toStructureItemDto(p, words);
-    });
+
+      structure.push(
+        this.presentationsMapper.toStructureItemDto(
+          { ...p, name, text },
+          words,
+        ),
+      );
+    }
 
     return {
       data: { total_words_count: totalWords, structure },
@@ -385,10 +430,24 @@ export class PresentationsService {
       where: { presentationId },
       order: { order: 'ASC' },
     });
-    return {
-      data: parts.map((p) => this.presentationsMapper.toPartDto(p)),
-      error: false,
-    };
+
+    const result: PartDto[] = [];
+    for (const p of parts) {
+      const name = await this.getPresentationPartContent(
+        p.presentationPartId,
+        PartTarget.Name,
+        p.name,
+      );
+      const text = await this.getPresentationPartContent(
+        p.presentationPartId,
+        PartTarget.Text,
+        p.text,
+      );
+
+      result.push(this.presentationsMapper.toPartDto({ ...p, name, text }));
+    }
+
+    return { data: result, error: false };
   }
 
   async createPart(
@@ -546,12 +605,16 @@ export class PresentationsService {
     };
   }
 
-  async getPresentationCursorPositions(userId: number, presentationId: number): Promise<StandardResponse<CursorPositionDto[]>> {
+  async getPresentationCursorPositions(
+    userId: number,
+    presentationId: number,
+  ): Promise<StandardResponse<CursorPositionDto[]>> {
     await this.findOneById(presentationId, userId);
-    const positions = this.textEditingGateway.getCursorPositionsForPresentation(presentationId);
+    const positions =
+      this.textEditingGateway.getCursorPositionsForPresentation(presentationId);
     return {
       data: positions,
       error: false,
-    }
+    };
   }
 }
