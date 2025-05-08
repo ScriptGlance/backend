@@ -15,6 +15,7 @@ import {PartsGateway} from "./parts.gateway";
 import {MulterModule} from "@nestjs/platform-express";
 import {PresentationStartEntity} from "../common/entities/PresentationStartEntity";
 import {VideoEntity} from "../common/entities/VideoEntity";
+import {TeleprompterGateway} from "./teleprompter.gateway";
 
 @Module({
     imports: [
@@ -36,6 +37,7 @@ import {VideoEntity} from "../common/entities/VideoEntity";
         PresentationMapper,
         PresentationGateway,
         PartsGateway,
+        TeleprompterGateway,
     ],
 })
 export class PresentationsModule {

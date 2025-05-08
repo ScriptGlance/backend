@@ -4,7 +4,7 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import {InjectRepository} from '@nestjs/typeorm';
-import {LessThanOrEqual, MoreThanOrEqual, Repository} from 'typeorm';
+import {IsNull, LessThanOrEqual, MoreThanOrEqual, Repository} from 'typeorm';
 
 import {PresentationEntity} from '../common/entities/PresentationEntity';
 import {ParticipantEntity} from '../common/entities/ParticipantEntity';
@@ -48,6 +48,8 @@ import * as path from "node:path";
 import * as fsPromises from 'fs/promises';
 import * as fs from "node:fs";
 import {Request, Response} from "express";
+import {ActivePresentationWithUsersDto} from "./dto/ActivePresentationWithUsersDto";
+import {TeleprompterGateway} from "./teleprompter.gateway";
 
 
 ffmpeg.setFfprobePath('ffprobe');
@@ -74,6 +76,7 @@ export class PresentationsService {
         private readonly videoRepository: Repository<VideoEntity>,
         @InjectRepository(PresentationStartEntity)
         private readonly presentationStartRepository: Repository<PresentationStartEntity>,
+        private readonly teleprompterGateway: TeleprompterGateway,
     ) {
     }
 
@@ -919,5 +922,48 @@ export class PresentationsService {
             error: false,
             data,
         };
+    }
+
+    async startPresentation(userId: number, presentationId: number): Promise<void> {
+        const presentation = await this.findOneById(presentationId, userId);
+        const existingSession = await this.presentationStartRepository.findOne({
+            where: { presentation: { presentationId }, endDate: IsNull() }
+        });
+        if (existingSession) {
+            throw new HttpException('Conflict: already launched', HttpStatus.CONFLICT);
+        }
+        const newSession = this.presentationStartRepository.create({
+            presentation,
+            startDate: new Date()
+        });
+        await this.presentationStartRepository.save(newSession);
+        this.presentationsGateway.emitPresentationEvent(
+            presentationId,
+            PresentationEventType.PresentationStarted
+        );
+    }
+
+    async stopPresentation(userId: number, presentationId: number): Promise<void> {
+        await this.findOneById(presentationId, userId);
+        const activeSession = await this.presentationStartRepository.findOne({
+            where: { presentation: { presentationId }, endDate: IsNull() }
+        });
+        if (!activeSession) {
+            throw new HttpException('Conflict: not currently launched', HttpStatus.CONFLICT);
+        }
+        activeSession.endDate = new Date();
+        await this.presentationStartRepository.save(activeSession);
+        this.presentationsGateway.emitPresentationEvent(
+            presentationId,
+            PresentationEventType.PresentationStopped
+        );
+    }
+
+    async getActivePresentation(
+        userId: number,
+        presentationId: number,
+    ): Promise<ActivePresentationWithUsersDto | null> {
+        await this.findOneById(presentationId, userId);
+        return this.teleprompterGateway.getActivePresentation(presentationId);
     }
 }

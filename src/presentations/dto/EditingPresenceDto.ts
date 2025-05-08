@@ -1,6 +1,6 @@
 import {PresenceEventType} from "../../common/enum/PresenceEventType";
 
-export class EditingPresenceDto {
+export class PresenceDto {
     user_id: number;
     type: PresenceEventType;
 
