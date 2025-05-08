@@ -283,4 +283,30 @@ export class PresentationsController {
         userId,
     );
   }
+
+  @Post(':id/start')
+  @HttpCode(HttpStatus.CREATED)
+  async startPresentation(
+      @GetUser('id') userId: number,
+      @Param('id', ParseIntPipe) id: number,
+  ) {
+    await this.service.startPresentation(userId, id);
+  }
+
+  @Post(':id/stop')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async stopPresentation(
+      @GetUser('id') userId: number,
+      @Param('id', ParseIntPipe) id: number,
+  ) {
+    await this.service.stopPresentation(userId, id);
+  }
+
+  @Get(':id/active')
+  async getActivePresentation(
+      @GetUser('id') userId: number,
+      @Param('id', ParseIntPipe) id: number,
+  ) {
+    return { data: await this.service.getActivePresentation(userId, id) };
+  }
 }

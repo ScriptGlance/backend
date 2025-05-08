@@ -9,7 +9,7 @@ import {
 import { Server, Socket as BaseSocket } from 'socket.io';
 import Redis from 'ioredis';
 import { InjectRedis } from '@nestjs-modules/ioredis';
-import { EditingPresenceDto } from './dto/EditingPresenceDto';
+import { PresenceDto } from './dto/EditingPresenceDto';
 import { PresenceEventType } from '../common/enum/PresenceEventType';
 import { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -167,7 +167,7 @@ export class PartsGateway
       .to(room)
       .emit(
         'editing_presence',
-        new EditingPresenceDto(userId, PresenceEventType.UserJoined),
+        new PresenceDto(userId, PresenceEventType.UserJoined),
       );
   }
 
@@ -189,7 +189,7 @@ export class PartsGateway
         .to(room)
         .emit(
           'editing_presence',
-          new EditingPresenceDto(userId, PresenceEventType.UserLeft),
+          new PresenceDto(userId, PresenceEventType.UserLeft),
         );
     }
   }
