@@ -8,6 +8,10 @@ import { EmailModule } from './email/email.module';
 import { PresentationsModule } from './presentations/presentations.module';
 import { dataSourceOptions } from '../data-source';
 import { RedisModule } from '@nestjs-modules/ioredis';
+import {ServeStaticModule} from "@nestjs/serve-static";
+import { join } from 'path';
+import { SharedVideoModule } from './shared-video/shared-video.module';
+
 
 @Module({
   imports: [
@@ -23,6 +27,15 @@ import { RedisModule } from '@nestjs-modules/ioredis';
     AuthModule,
     EmailModule,
     PresentationsModule,
+    ServeStaticModule.forRoot({
+      serveRoot: '/previews',
+      rootPath: join(process.cwd(), 'uploads', 'previews'),
+      serveStaticOptions: {
+        index: false,
+        maxAge: '1h',
+      },
+    }),
+    SharedVideoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

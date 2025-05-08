@@ -3,11 +3,12 @@ import {
   PrimaryGeneratedColumn,
   Column,
   OneToMany,
-  OneToOne,
+  OneToOne, DeleteDateColumn,
 } from 'typeorm';
 import { ParticipantEntity } from './ParticipantEntity';
 import { SubscriptionEntity } from './SubscriptionEntity';
 import { UserWithPremiumEntity } from './UserWithPremiumEntity';
+import {VideoEntity} from "./VideoEntity";
 
 @Entity('user')
 export class UserEntity {
@@ -44,7 +45,7 @@ export class UserEntity {
   @Column({ name: 'access_token', nullable: true })
   accessToken?: string;
 
-  @Column({ name: 'deleted_at', nullable: true })
+  @DeleteDateColumn({ name: 'deleted_at', nullable: true })
   deletedAt?: Date;
 
   @OneToMany(() => ParticipantEntity, (participant) => participant.user)
@@ -54,4 +55,7 @@ export class UserEntity {
   subscription: SubscriptionEntity;
 
   userPremium?: UserWithPremiumEntity;
+
+  @OneToMany(() => VideoEntity, (video) => video.user)
+  videos: VideoEntity[];
 }

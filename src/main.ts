@@ -4,6 +4,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { StandardResponseExceptionFilter } from './common/filter/StandardResponseExceptionFilter';
 import { ValidationPipe } from '@nestjs/common';
+import { promises as fs } from 'fs';
+import * as path from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -37,15 +39,9 @@ async function bootstrap() {
     },
   });
 
-  const configService = app.get(ConfigService);
+  await fs.mkdir(path.join(process.cwd(), 'uploads', 'videos'), { recursive: true });
+  await fs.mkdir(path.join(process.cwd(), 'uploads', 'previews'), { recursive: true });
 
-  // Print out the desired environment variables
-  console.log('DB_HOST:', configService.get<string>('DB_HOST'));
-  console.log('DB_PORT:', configService.get<number>('DB_PORT'));
-  console.log('DB_USERNAME:', configService.get<string>('DB_USERNAME'));
-  console.log('DB_PASSWORD:', configService.get<string>('DB_PASSWORD'));
-  console.log('DB_NAME:', configService.get<string>('DB_NAME'));
-  console.log('DEBUG:', configService.get<boolean>('DEBUG'));
 
   await app.listen(process.env.PORT ?? 3000);
 }

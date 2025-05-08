@@ -10,6 +10,8 @@ import { InvitationDto } from './dto/InvitationDto';
 import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
 import { StructureItemDto } from './dto/StructureItemDto';
 import { PartDto } from './dto/PartDto';
+import {VideoEntity} from "../common/entities/VideoEntity";
+import {VideoDto} from "./dto/VideoDto";
 
 @Injectable()
 export class PresentationMapper {
@@ -72,5 +74,15 @@ export class PresentationMapper {
       part_order: part.order,
       assignee_participant_id: part.assigneeParticipantId,
     };
+  }
+
+  toVideoDto(video: VideoEntity): VideoDto {
+    return {
+      video_id: video.videoId,
+      video_title: video.title,
+      video_duration: video.duration,
+      video_thumbnail: '/' + video.photoPreviewLink.replace('uploads/', ''),
+      video_author: this.toUserDto(video.user),
+    }
   }
 }
