@@ -11,6 +11,7 @@ import {
 import { ParticipantEntity } from './ParticipantEntity';
 import { PresentationPartEntity } from './PresentationPartEntity';
 import { InvitationEntity } from './InvitationEntity';
+import {PresentationStartEntity} from "./PresentationStartEntity";
 
 @Entity('presentation')
 export class PresentationEntity {
@@ -44,4 +45,7 @@ export class PresentationEntity {
 
   @OneToMany(() => InvitationEntity, (invitation) => invitation.presentation)
   invitations: InvitationEntity[];
+
+  @OneToMany(() => PresentationStartEntity, (presentationStart) => presentationStart.presentation)
+  presentationStarts: PresentationStartEntity[];
 }
