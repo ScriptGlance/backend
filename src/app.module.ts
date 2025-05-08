@@ -7,6 +7,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UserEntity } from './auth/entities/UserEntity';
 import { ModeratorEntity } from './auth/entities/ModeratorEntity';
 import { AdminEntity } from './auth/entities/AdminEntity';
+import { PasswordResetTokenEntity } from './auth/entities/PasswordResetTokenEntity';
+import { EmailVerificationCodeEntity } from './auth/entities/EmailVerificationCodeEntity';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -23,12 +26,19 @@ import { AdminEntity } from './auth/entities/AdminEntity';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
-        entities: [UserEntity, ModeratorEntity, AdminEntity],
+        entities: [
+          UserEntity,
+          ModeratorEntity,
+          AdminEntity,
+          PasswordResetTokenEntity,
+          EmailVerificationCodeEntity,
+        ],
         synchronize: configService.get<boolean>('DEBUG'),
       }),
       inject: [ConfigService],
     }),
     AuthModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [AppService],
