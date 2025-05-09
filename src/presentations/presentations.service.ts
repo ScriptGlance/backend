@@ -1,10 +1,11 @@
 import {
+    ConflictException,
     ForbiddenException, HttpException, HttpStatus,
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
 import {InjectRepository} from '@nestjs/typeorm';
-import {IsNull, LessThanOrEqual, MoreThanOrEqual, Repository} from 'typeorm';
+import {IsNull, Repository} from 'typeorm';
 
 import {PresentationEntity} from '../common/entities/PresentationEntity';
 import {ParticipantEntity} from '../common/entities/ParticipantEntity';
@@ -24,7 +25,7 @@ import {ColorService} from './color.service';
 import {UserWithPremiumEntity} from '../common/entities/UserWithPremiumEntity';
 import {PresentationMapper} from './presentations.mapper';
 import {InvitationDto} from './dto/InvitationDto';
-import {PresentationGateway} from './presentations.gateway';
+import {PresentationsGateway} from './presentations.gateway';
 import {PresentationEventType} from '../common/enum/PresentationEventType';
 import {StructureResponseDto} from './dto/StructureResponseDto';
 import {PresentationPartEntity} from '../common/entities/PresentationPartEntity';
@@ -68,7 +69,7 @@ export class PresentationsService {
         private readonly presentationPartRepository: Repository<PresentationPartEntity>,
         private readonly colorService: ColorService,
         private readonly presentationsMapper: PresentationMapper,
-        private readonly presentationsGateway: PresentationGateway,
+        private readonly presentationsGateway: PresentationsGateway,
         private readonly partsGateway: PartsGateway,
         @InjectRedis()
         private readonly redis: Redis,
@@ -496,9 +497,9 @@ export class PresentationsService {
         if (!participant) {
             throw new NotFoundException('Owner participant not found');
         }
-        // if (presentation.isActive) { TODO: check if presentation is active
-        //   throw new ConflictException('presentation is currently launched');
-        // }
+        if (await this.getPresentationStart(presentationId)) {
+          throw new ConflictException('presentation is currently launched');
+        }
 
         await this.presentationPartRepository
             .createQueryBuilder()
@@ -552,18 +553,17 @@ export class PresentationsService {
         if (!part) {
             throw new NotFoundException(`Part ${partId} not found`);
         }
-        await this.findOneById(part.presentation.presentationId, userId);
-        // if (part.presentation.isActive) { TODO: check if presentation is active
-        //   throw new ConflictException(
-        //     'cannot update part while presentation active',
-        //   );
-        // }
+        await this.findOneById(part.presentationId, userId);
+        if (await this.getPresentationStart(part.presentationId)) {
+          throw new ConflictException(
+            'cannot update part while presentation active',
+          );
+        }
 
         if (data.part_order !== undefined && data.part_order !== part.order) {
             const oldOrder = part.order;
             const newOrder = data.part_order;
             const presentationId = part.presentation.presentationId;
-
             if (newOrder < oldOrder) {
                 await this.presentationPartRepository
                     .createQueryBuilder()
@@ -626,12 +626,12 @@ export class PresentationsService {
         if (!part) {
             throw new NotFoundException(`Part ${partId} not found`);
         }
-        await this.findOneById(part.presentation.presentationId, userId);
-        // if (part.presentation.isActive) { TODO: check if presentation is active
-        //   throw new ConflictException(
-        //     'cannot delete part while presentation active',
-        //   );
-        // }
+        await this.findOneById(part.presentationId, userId);
+        if (await this.getPresentationStart(part.presentationId)) {
+          throw new ConflictException(
+            'cannot delete part while presentation active',
+          );
+        }
 
         const presentationId = part.presentation.presentationId;
         const oldOrder = part.order;
@@ -738,8 +738,8 @@ export class PresentationsService {
             .where('p.presentation_id = :pid', {
                 pid: presentation.presentationId,
             })
-            .andWhere('ps.start_date <= :ts', {ts: recordingStart})
-            .andWhere('ps.end_date   >= :ts', {ts: recordingStart})
+            .andWhere('ps.start_date <= :ts', { ts: recordingStart })
+            .andWhere('(ps.end_date >= :ts OR ps.end_date IS NULL)', { ts: recordingStart })
             .getOne();
         if (!presentationStart) {
             throw new NotFoundException(
@@ -758,7 +758,7 @@ export class PresentationsService {
             photoPreviewLink: thumbnail,
             shareCode,
             recordingStartDate: recordingStart,
-            user: presentation.participants[0].user
+            user: presentation.participants[0].user,
         });
         await this.videoRepository.save(video);
         this.presentationsGateway.emitPresentationEvent(
@@ -905,7 +905,7 @@ export class PresentationsService {
         const isOwner = presentation.owner.user.userId === userId;
         const queryBuilder = this.videoRepository
             .createQueryBuilder('video')
-            .innerJoin('video.presentationStart', 'ps')
+            .innerJoinAndSelect('video.presentationStart', 'ps')
             .innerJoin('ps.presentation', 'p', 'p.presentationId = :pid', { pid: presentationId })
             .innerJoinAndSelect('video.user', 'u');
 
@@ -924,14 +924,25 @@ export class PresentationsService {
         };
     }
 
-    async startPresentation(userId: number, presentationId: number): Promise<void> {
-        const presentation = await this.findOneById(presentationId, userId);
-        const existingSession = await this.presentationStartRepository.findOne({
+    private async getPresentationStart(presentationId: number) {
+       return this.presentationStartRepository.findOne({
             where: { presentation: { presentationId }, endDate: IsNull() }
         });
+    }
+
+    async startPresentation(userId: number, presentationId: number): Promise<void> {
+        const presentation = await this.findOneById(presentationId, userId);
+
+        const activePresentation = await this.teleprompterGateway.getActivePresentation(presentationId);
+        if (activePresentation?.activePresentation?.currentOwnerUserId !== userId) {
+            throw new ForbiddenException('You are not the owner of the presentation or there are no users in the active presentation');
+        }
+
+        const existingSession = await this.getPresentationStart(presentationId);
         if (existingSession) {
             throw new HttpException('Conflict: already launched', HttpStatus.CONFLICT);
         }
+
         const newSession = this.presentationStartRepository.create({
             presentation,
             startDate: new Date()
@@ -941,13 +952,17 @@ export class PresentationsService {
             presentationId,
             PresentationEventType.PresentationStarted
         );
+        await this.partsGateway.flushPresentationChanges(presentationId);
+        await this.teleprompterGateway.setTeleprompterState(presentationId, true)
     }
 
     async stopPresentation(userId: number, presentationId: number): Promise<void> {
-        await this.findOneById(presentationId, userId);
-        const activeSession = await this.presentationStartRepository.findOne({
-            where: { presentation: { presentationId }, endDate: IsNull() }
-        });
+        const activePresentation = await this.teleprompterGateway.getActivePresentation(presentationId);
+        if (activePresentation?.activePresentation?.currentOwnerUserId !== userId) {
+            throw new ForbiddenException('You are not the owner of the presentation');
+        }
+
+        const activeSession = await this.getPresentationStart(presentationId);
         if (!activeSession) {
             throw new HttpException('Conflict: not currently launched', HttpStatus.CONFLICT);
         }
@@ -957,6 +972,7 @@ export class PresentationsService {
             presentationId,
             PresentationEventType.PresentationStopped
         );
+        await this.teleprompterGateway.setTeleprompterState(presentationId, false)
     }
 
     async getActivePresentation(

@@ -22,7 +22,7 @@ type Socket = BaseSocket<any, any, any, SocketData>;
 
 @WebSocketGateway({ cors: true })
 @Injectable()
-export class PresentationGateway
+export class PresentationsGateway
   extends BaseGateway
   implements OnGatewayDisconnect, OnGatewayInit
 {
@@ -32,9 +32,9 @@ export class PresentationGateway
     jwtService: JwtService,
     configService: ConfigService,
     @InjectRepository(PresentationEntity)
-    private readonly presentationRepository: Repository<PresentationEntity>,
+    presentationRepository: Repository<PresentationEntity>,
   ) {
-    super(jwtService, configService);
+    super(jwtService, configService, presentationRepository);
   }
 
   afterInit(server: Server) {
@@ -56,19 +56,9 @@ export class PresentationGateway
       return;
     }
 
-    const presentation = await this.presentationRepository
-      .createQueryBuilder('presentation')
-      .leftJoinAndSelect('presentation.owner', 'owner')
-      .leftJoinAndSelect('owner.user', 'ownerUser')
-      .leftJoinAndSelect('presentation.participants', 'participant')
-      .leftJoinAndSelect('participant.user', 'participantUser')
-      .where('presentation.presentationId = :id', { id: data.presentationId })
-      .getOne();
+    const presentation = this.getPresentationWithAccessControl(data.presentationId, userId)
 
-    if (
-      !presentation ||
-      !this.userHasAccessToPresentation(presentation, userId)
-    ) {
+    if (!presentation) {
       client.emit('error', 'Access denied to presentation');
       return;
     }
@@ -78,18 +68,6 @@ export class PresentationGateway
     client.emit('subscribed', { room });
   }
 
-  private userHasAccessToPresentation(
-    presentation: PresentationEntity,
-    userId: number,
-  ): boolean {
-    if (presentation.owner?.user?.userId === userId) {
-      return true;
-    }
-
-    return presentation.participants?.some(
-      (participant) => participant.user?.userId === userId,
-    );
-  }
 
   emitPresentationEvent(presentationId: number, event: PresentationEventType) {
     const room = `presentation/${presentationId}/events`;

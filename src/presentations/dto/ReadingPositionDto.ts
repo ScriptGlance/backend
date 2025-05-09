@@ -1,5 +1,9 @@
 export class ReadingPositionDto {
-    presentationId: number;
-    position: number;
     partId: number;
+    position: number;
+
+    constructor(partId: number, position: number) {
+        this.partId = partId;
+        this.position = position;
+    }
 }
