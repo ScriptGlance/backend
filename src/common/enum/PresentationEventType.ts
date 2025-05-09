@@ -5,4 +5,5 @@ export enum PresentationEventType {
     TextChanged = "text_changed",
     PresentationStarted = "presentation_started",
     PresentationStopped = "presentation_stopped",
+    JoinedUsersChanged = "joined_users_changed",
 }

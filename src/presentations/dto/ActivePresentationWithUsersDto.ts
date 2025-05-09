@@ -1,6 +1,6 @@
 import {ActivePresentationDto} from "./ActivePresentationDto";
 
 export class ActivePresentationWithUsersDto {
-    activePresentation: ActivePresentationDto;
+    activePresentation?: ActivePresentationDto;
     joinedUserIds: number[];
 }

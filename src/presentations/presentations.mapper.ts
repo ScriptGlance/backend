@@ -83,6 +83,10 @@ export class PresentationMapper {
       video_duration: video.duration,
       video_thumbnail: '/' + video.photoPreviewLink.replace('uploads/', ''),
       video_author: this.toUserDto(video.user),
+      presentation_start: {
+        start_date: video.presentationStart.startDate,
+        end_date: video.presentationStart.endDate,
+      }
     }
   }
 }

@@ -16,7 +16,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PresentationEntity } from '../common/entities/PresentationEntity';
-import { Repository } from 'typeorm';
+import {IsNull, Repository} from 'typeorm';
 import { CursorPositionDto } from './dto/CursorPositionDto';
 import { PartTarget } from '../common/enum/PartTarget';
 import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
@@ -25,9 +25,8 @@ import { Mutex } from 'async-mutex';
 import { TextOperationType } from '../common/enum/TextOperationType';
 import { SocketData } from '../common/interface/SocketData';
 import { BaseGateway } from '../common/base/base.gateway';
-import { PresentationEventType } from '../common/enum/PresentationEventType';
-import { PresentationEventDto } from './dto/PresentationEventDto';
 import { PartEventDto } from './dto/PartEventDto';
+import {PresentationStartEntity} from "../common/entities/PresentationStartEntity";
 
 type Socket = BaseSocket<any, any, any, SocketData>;
 
@@ -53,12 +52,14 @@ export class PartsGateway
     jwtService: JwtService,
     configService: ConfigService,
     @InjectRepository(PresentationEntity)
-    private readonly presentationRepository: Repository<PresentationEntity>,
+    presentationRepository: Repository<PresentationEntity>,
     @InjectRepository(PresentationPartEntity)
     private readonly presentationPartRepository: Repository<PresentationPartEntity>,
+    @InjectRepository(PresentationStartEntity)
+    private readonly presentationStartRepository: Repository<PresentationStartEntity>,
     @InjectRedis() private redis: Redis,
   ) {
-    super(jwtService, configService);
+    super(jwtService, configService, presentationRepository);
   }
 
   onModuleInit() {
@@ -106,9 +107,19 @@ export class PartsGateway
     target: PartTarget,
     content: string,
   ) {
-    const updateData =
-      target === PartTarget.Text ? { text: content } : { name: content };
-
+    const presentation = await this.presentationPartRepository.find({
+      where: { presentationPartId: partId },
+    });
+    if (!presentation) {
+      return;
+    }
+    const presentationStart = await this.presentationStartRepository.findOne({
+      where: { presentation, endDate: IsNull() }
+    });
+    const updateData = target === PartTarget.Text ? { text: content } : { name: content };
+    if(presentationStart) {
+      return;
+    }
     await this.presentationPartRepository.update(
       { presentationPartId: partId },
       updateData,
@@ -245,33 +256,14 @@ export class PartsGateway
 
   private async getPresentationByPartId(partId: number) {
     return this.presentationRepository
-      .createQueryBuilder('presentation')
-      .leftJoinAndSelect('presentation.owner', 'owner')
-      .leftJoinAndSelect('owner.user', 'ownerUser')
-      .leftJoinAndSelect('presentation.participants', 'participant')
-      .leftJoinAndSelect('participant.user', 'participantUser')
-      .leftJoinAndSelect('presentation.parts', 'part')
-      .where('part.presentationPartId = :id', { id: partId })
-      .getOne();
-  }
-
-  private async getPresentationWithAccessControl(
-    presentationId: number,
-    userId: number,
-  ) {
-    const presentation = await this.presentationRepository
-      .createQueryBuilder('presentation')
-      .leftJoinAndSelect('presentation.owner', 'owner')
-      .leftJoinAndSelect('owner.user', 'ownerUser')
-      .leftJoinAndSelect('presentation.participants', 'participant')
-      .leftJoinAndSelect('participant.user', 'participantUser')
-      .where('presentation.presentationId = :id', { id: presentationId })
-      .getOne();
-
-    return presentation &&
-      this.userHasAccessToPresentation(presentation, userId)
-      ? presentation
-      : null;
+        .createQueryBuilder('presentation')
+        .leftJoinAndSelect('presentation.owner', 'owner')
+        .leftJoinAndSelect('owner.user', 'ownerUser')
+        .leftJoinAndSelect('presentation.participants', 'participant')
+        .leftJoinAndSelect('participant.user', 'participantUser')
+        .leftJoinAndSelect('presentation.parts', 'part')
+        .where('part.presentationPartId = :id', {id: partId})
+        .getOne();
   }
 
   private getRedisKey(partId: number, target: string): string {
@@ -415,19 +407,6 @@ export class PartsGateway
     client.broadcast.to(room).emit('cursor_position_change', dto);
   }
 
-  private userHasAccessToPresentation(
-    presentation: PresentationEntity,
-    userId: number,
-  ): boolean {
-    if (presentation.owner?.user?.userId === userId) {
-      return true;
-    }
-
-    return presentation.participants?.some(
-      (participant) => participant.user?.userId === userId,
-    );
-  }
-
   private getRoomName(presentationId: number): string {
     return `presentation/${presentationId}/text-editing`;
   }
@@ -452,5 +431,43 @@ export class PartsGateway
   public emitPartEvent(presentationId: number, event: PartEventDto) {
     const room = this.getRoomName(presentationId);
     this.server.to(room).emit('partEvent', event);
+  }
+
+  public async flushPresentationChanges(
+      presentationId: number,
+  ): Promise<void> {
+    const parts = await this.presentationPartRepository.find({
+      where: { presentation: { presentationId } },
+    });
+
+    for (const part of parts) {
+      for (const target of Object.values(PartTarget) as PartTarget[]) {
+        const redisKey = this.getRedisKey(part.presentationPartId, target);
+
+        const score = await this.redis.zscore(this.PENDING_SET, redisKey);
+        if (!score) {
+          continue;
+        }
+
+        const raw = await this.redis.get(redisKey);
+        if (raw) {
+          const { content } = JSON.parse(raw) as {
+            content: string;
+            version: number;
+          };
+
+          const updateData =
+              target === PartTarget.Text
+                  ? { text: content }
+                  : { name: content };
+          await this.presentationPartRepository.update(
+              { presentationPartId: part.presentationPartId },
+              updateData,
+          );
+        }
+
+        await this.redis.zrem(this.PENDING_SET, redisKey);
+      }
+    }
   }
 }

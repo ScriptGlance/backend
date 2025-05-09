@@ -9,7 +9,7 @@ import {InvitationEntity} from '../common/entities/InvitationEntity';
 import {AuthModule} from '../auth/auth.module';
 import {ColorService} from './color.service';
 import {PresentationMapper} from './presentations.mapper';
-import {PresentationGateway} from './presentations.gateway';
+import {PresentationsGateway} from './presentations.gateway';
 import {PresentationPartEntity} from '../common/entities/PresentationPartEntity';
 import {PartsGateway} from "./parts.gateway";
 import {MulterModule} from "@nestjs/platform-express";
@@ -35,7 +35,7 @@ import {TeleprompterGateway} from "./teleprompter.gateway";
         PresentationsService,
         ColorService,
         PresentationMapper,
-        PresentationGateway,
+        PresentationsGateway,
         PartsGateway,
         TeleprompterGateway,
     ],

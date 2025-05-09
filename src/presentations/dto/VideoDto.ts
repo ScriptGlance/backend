@@ -1,4 +1,5 @@
 import {UserDto} from "./UserDto";
+import {PresentationStartDto} from "./PresentationStartDto";
 
 export class VideoDto {
     video_id: number;
@@ -6,4 +7,5 @@ export class VideoDto {
     video_duration: number;
     video_title: string;
     video_author: UserDto;
+    presentation_start: PresentationStartDto;
 }
