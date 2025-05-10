@@ -6,7 +6,7 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import {InjectRepository} from '@nestjs/typeorm';
-import {Brackets, In, IsNull, Repository} from 'typeorm';
+import {In, IsNull, Repository} from 'typeorm';
 
 import {PresentationEntity} from '../common/entities/PresentationEntity';
 import {ParticipantEntity} from '../common/entities/ParticipantEntity';
@@ -52,7 +52,6 @@ import * as fs from "node:fs";
 import {Request, Response} from "express";
 import {ActivePresentationWithUsersDto} from "./dto/ActivePresentationWithUsersDto";
 import {TeleprompterGateway} from "./teleprompter.gateway";
-import {use} from "passport";
 import {UserEntity} from "../common/entities/UserEntity";
 import {VideosLeftDto} from "./dto/VideosLeftDto";
 
@@ -506,7 +505,7 @@ export class PresentationsService {
             throw new NotFoundException('Owner participant not found');
         }
         if (await this.getPresentationStart(presentationId)) {
-          throw new ConflictException('presentation is currently launched');
+            throw new ConflictException('presentation is currently launched');
         }
 
         await this.presentationPartRepository
@@ -563,9 +562,9 @@ export class PresentationsService {
         }
         await this.findOneById(part.presentationId, userId);
         if (await this.getPresentationStart(part.presentationId)) {
-          throw new ConflictException(
-            'cannot update part while presentation active',
-          );
+            throw new ConflictException(
+                'cannot update part while presentation active',
+            );
         }
 
         if (data.part_order !== undefined && data.part_order !== part.order) {
@@ -636,9 +635,9 @@ export class PresentationsService {
         }
         await this.findOneById(part.presentationId, userId);
         if (await this.getPresentationStart(part.presentationId)) {
-          throw new ConflictException(
-            'cannot delete part while presentation active',
-          );
+            throw new ConflictException(
+                'cannot delete part while presentation active',
+            );
         }
 
         const presentationId = part.presentation.presentationId;
@@ -743,9 +742,9 @@ export class PresentationsService {
         const presentationStart = await this.presentationStartRepository
             .createQueryBuilder('ps')
             .innerJoin('ps.presentation', 'p')
-            .where('p.presentation_id = :pid', { pid: presentationId })
-            .andWhere('ps.start_date <= :ts', { ts: recordingStart })
-            .andWhere('(ps.end_date >= :ts OR ps.end_date IS NULL)', { ts: recordingStart })
+            .where('p.presentation_id = :pid', {pid: presentationId})
+            .andWhere('ps.start_date <= :ts', {ts: recordingStart})
+            .andWhere('(ps.end_date >= :ts OR ps.end_date IS NULL)', {ts: recordingStart})
             .getOne();
 
         if (!presentationStart) {
@@ -768,7 +767,7 @@ export class PresentationsService {
                 .createQueryBuilder('v')
                 .innerJoin('v.presentationStart', 'ps')
                 .innerJoin('ps.presentation', 'p')
-                .where('p.presentation_id = :pid', { pid: presentationId })
+                .where('p.presentation_id = :pid', {pid: presentationId})
                 .getCount();
 
             if (existingVideosCount >= FREE_VIDEOS_PER_PRESENTATION) {
@@ -947,11 +946,11 @@ export class PresentationsService {
         const queryBuilder = this.videoRepository
             .createQueryBuilder('video')
             .innerJoinAndSelect('video.presentationStart', 'ps')
-            .innerJoin('ps.presentation', 'p', 'p.presentationId = :pid', { pid: presentationId })
+            .innerJoin('ps.presentation', 'p', 'p.presentationId = :pid', {pid: presentationId})
             .innerJoinAndSelect('video.user', 'u');
 
         if (!isOwner) {
-            queryBuilder.andWhere('u.userId = :uid', { uid: userId });
+            queryBuilder.andWhere('u.userId = :uid', {uid: userId});
         }
 
         const videos = await queryBuilder.getMany();
@@ -966,8 +965,8 @@ export class PresentationsService {
     }
 
     private async getPresentationStart(presentationId: number) {
-       return this.presentationStartRepository.findOne({
-            where: { presentation: { presentationId }, endDate: IsNull() }
+        return this.presentationStartRepository.findOne({
+            where: {presentation: {presentationId}, endDate: IsNull()}
         });
     }
 
@@ -1036,22 +1035,21 @@ export class PresentationsService {
     }
 
     async getParticipantsVideosLeft(userId: number, presentationId: number): Promise<StandardResponse<VideosLeftDto[]>> {
-
-            await this.findOneById(presentationId, userId);
-            const activePresentation = await this.teleprompterGateway.getActivePresentation(presentationId);
-            if (activePresentation?.currentOwnerUserId !== userId) {
+        await this.findOneById(presentationId, userId);
+        const activePresentation = await this.teleprompterGateway.getActivePresentation(presentationId);
+        if (activePresentation?.currentOwnerUserId !== userId) {
             throw new ForbiddenException(
                 'You are not the owner of the presentation or there are no users in the active presentation'
             );
         }
 
         const participants = await this.participantRepository.find({
-            where: { presentationId },
+            where: {presentationId},
             relations: ['user'],
         });
         const participantUserIds = participants.map(p => p.user.userId);
         if (participantUserIds.length === 0) {
-            return { error: false, data: [] };
+            return {error: false, data: []};
         }
 
         const rawCounts = await this.videoRepository
@@ -1064,8 +1062,8 @@ export class PresentationsService {
                 'up',
                 'up.user_id = u.user_id AND up.has_premium = true'
             )
-            .where('p.presentation_id = :presentationId', { presentationId })
-            .andWhere('u.user_id IN (:...participantUserIds)', { participantUserIds })
+            .where('p.presentation_id = :presentationId', {presentationId})
+            .andWhere('u.user_id IN (:...participantUserIds)', {participantUserIds})
             .andWhere('up.user_id IS NULL')
             .select('u.user_id', 'userId')
             .addSelect('COUNT(video.video_id)', 'recordedVideosCount')
@@ -1073,7 +1071,7 @@ export class PresentationsService {
             .getRawMany<{ userId: number; recordedVideosCount: string }>();
 
         const countMap = new Map<number, number>();
-        for (const { userId: uid, recordedVideosCount } of rawCounts) {
+        for (const {userId: uid, recordedVideosCount} of rawCounts) {
             countMap.set(uid, Number(recordedVideosCount));
         }
 
@@ -1100,6 +1098,44 @@ export class PresentationsService {
             return new VideosLeftDto(uid, left);
         });
 
-        return { error: false, data: result };
+        return {error: false, data: result};
+    }
+
+    async sendActivePartChangeReaderConfirmation(
+        userId: number,
+        presentationId: number,
+        newReaderId: number
+    ): Promise<StandardResponse<void>> {
+        await this.findOneById(presentationId, userId);
+        const activePresentation = await this.teleprompterGateway.getActivePresentation(presentationId);
+        if (activePresentation?.currentOwnerUserId !== userId) {
+            throw new ForbiddenException(
+                'You are not the owner of the presentation or there are no users in the active presentation'
+            );
+        }
+        await this.teleprompterGateway.emitPartReadingConfirmationRequiredEvent(presentationId, newReaderId);
+        return {
+            error: false,
+        }
+    }
+
+    async confirmActivePartChangeReader(
+        userId: number,
+        presentationId: number,
+        isFromStartPosition: boolean
+    ): Promise<StandardResponse<void>> {
+        await this.findOneById(presentationId, userId);
+        const activePresentation = await this.teleprompterGateway.getActivePresentation(presentationId);
+        if (activePresentation?.awaitingConfirmationUserId !== userId) {
+            throw new ForbiddenException('You have no awaiting confirmation');
+        }
+        await this.teleprompterGateway.changeCurrentPartReader(
+            presentationId,
+            userId,
+            isFromStartPosition
+        );
+        return {
+            error: false,
+        }
     }
 }
