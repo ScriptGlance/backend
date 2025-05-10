@@ -25,18 +25,23 @@ import {Mutex} from "async-mutex";
 import {PresentationStartEntity} from "../common/entities/PresentationStartEntity";
 import {PresentationEventType} from "../common/enum/PresentationEventType";
 import {PresentationsGateway} from "./presentations.gateway";
-import {OnModuleInit} from "@nestjs/common";
+import {ConflictException, NotFoundException, OnModuleInit} from "@nestjs/common";
 import {PresentationEntity} from "../common/entities/PresentationEntity";
 import {OwnerChangeEventDto} from "./dto/OwnerChangeEventDto";
+import {JoinedUserDto} from "./dto/JoinedUserDto";
+import {RecordingModeChangeDto} from "./dto/RecordingModeChangeDto";
+import {UserRecordedVideosDto} from "./dto/UserRecordedVideosDto";
+import {RecordedVideosCountChangeEventDto} from "./dto/RecordedVideosCountChangeEventDto";
 
-type TeleprompterSocket = Socket & { data: { user?: { id: number } } };
+type TeleprompterSocketData = { user?: { id: number } };
+type TeleprompterSocket = Socket & { data: TeleprompterSocketData };
 
 @WebSocketGateway({cors: true})
 export class TeleprompterGateway extends BaseGateway implements OnGatewayDisconnect, OnModuleInit {
     @WebSocketServer()
     server: Server;
 
-    private readonly joinedUsers = new Map<number, Set<number>>();
+    private readonly joinedUsers = new Map<number, Set<JoinedUserDto>>();
     private readonly redisKeyPrefix = 'teleprompter:session:';
     private readonly mutex = new Mutex();
 
@@ -86,13 +91,13 @@ export class TeleprompterGateway extends BaseGateway implements OnGatewayDisconn
         const room = this.getRoomName(data.presentationId);
         await client.join(room);
         if (!this.joinedUsers.has(data.presentationId)) {
-            const users = new Set<number>();
-            users.add(userId);
+            const users = new Set<JoinedUserDto>();
+            users.add(new JoinedUserDto(userId));
             this.joinedUsers.set(data.presentationId, users);
             const session = await this.initializeSessionInRedis(data.presentationId, false);
             this.emitOwnerChangeEvent(data.presentationId, session!.currentOwnerUserId);
         } else {
-            this.joinedUsers.get(data.presentationId)!.add(userId);
+            this.joinedUsers.get(data.presentationId)!.add(new JoinedUserDto(userId));
             await this.checkOwnerChange(data.presentationId);
         }
         client.broadcast
@@ -120,9 +125,9 @@ export class TeleprompterGateway extends BaseGateway implements OnGatewayDisconn
 
         await this.mutex.runExclusive(async () => {
             for (const [presentationId, users] of this.joinedUsers.entries()) {
-                if (users.has(userId)) {
-                    users.delete(userId);
-
+                const user = Array.from(users ?? []).find(user => user.userId === userId);
+                if (user) {
+                    users.delete(user);
                     const room = this.getRoomName(presentationId);
                     this.server.to(room).emit(
                         'teleprompter_presence',
@@ -165,6 +170,38 @@ export class TeleprompterGateway extends BaseGateway implements OnGatewayDisconn
         this.server.to(room).emit("owner_changed", new OwnerChangeEventDto(newOwnerUserId));
     }
 
+    private emitRecordingModeChange(presentationId: number, userId: number, isActive: boolean) {
+        const room = this.getRoomName(presentationId);
+        this.server.to(room).emit("recording_mode_changed", new RecordingModeChangeDto(userId, isActive));
+    }
+
+    private async emitRecordedVideosCountChange(
+        presentationId: number,
+        userId: number,
+        recordedVideosCount: number
+    ) {
+        const activeSession = await this.getActiveSession(presentationId);
+        if (!activeSession) return;
+
+        const ownerUserId = activeSession.currentOwnerUserId;
+        const room = this.getRoomName(presentationId);
+
+        const socketsInRoom = await this.server.in(room).fetchSockets();
+
+        const ownerSocket = socketsInRoom.find(
+            socket => (socket.data as TeleprompterSocketData).user?.id === ownerUserId
+        );
+
+        if (ownerSocket) {
+            ownerSocket.emit(
+                'recorded_videos_count_change',
+                new RecordedVideosCountChangeEventDto(userId, recordedVideosCount)
+            );
+        }
+    }
+
+
+
     private async initializeSessionInRedis(presentationId: number, isStarted: boolean) {
         const parts = await this.presentationPartRepository.find({
             where: {presentationId},
@@ -177,12 +214,15 @@ export class TeleprompterGateway extends BaseGateway implements OnGatewayDisconn
             assigneeUserId: item.assignee.user.userId,
         }));
 
+        const lastSession = await this.getActiveSession(presentationId);
+
         const initialSession: ActivePresentationDto = {
             currentReadingPosition: {
                 partId: structure[0]?.partId ?? 0,
                 position: 0
             },
             structure,
+            userRecordedVideos: lastSession?.userRecordedVideos ?? [],
             currentPresentationStartDate: isStarted ? new Date() : undefined,
             currentOwnerUserId: (await this.getCurrentOwnerUserId(presentationId))!,
         };
@@ -191,7 +231,7 @@ export class TeleprompterGateway extends BaseGateway implements OnGatewayDisconn
     }
 
     private async getCurrentOwnerUserId(presentationId: number): Promise<number | undefined> {
-        const joinedUserIds = Array.from(this.joinedUsers.get(presentationId) ?? []);
+        const joinedUserIds = Array.from(this.joinedUsers.get(presentationId) ?? []).map(user => user.userId);
         const presentation = await this.presentationRepository.findOne({
             where: {presentationId},
             relations: ['owner.user'],
@@ -205,56 +245,101 @@ export class TeleprompterGateway extends BaseGateway implements OnGatewayDisconn
 
     @SubscribeMessage('reading_position')
     async handleReadingPosition(
-        @MessageBody() data: { position: number, presentationId: number },
+        @MessageBody() data: { position: number; presentationId: number },
+        @ConnectedSocket() client: TeleprompterSocket,
+    ) {
+        const { position, presentationId } = data;
+        const userId = client.data.user?.id;
+
+        if (!userId) {
+            return;
+        }
+
+        const room = this.getRoomName(presentationId);
+        const session = await this.getActiveSession(presentationId);
+        if (!session) {
+            return this.emitError(client, 'No active session');
+        }
+        if (!session.currentPresentationStartDate) {
+            return this.emitError(client, 'Presentation is not started');
+        }
+
+        const { structure, currentReadingPosition } = session;
+        const currentPartIndex = structure.findIndex(p => p.partId === currentReadingPosition.partId);
+        if (currentPartIndex < 0) {
+            return this.emitError(client, 'Invalid reading position');
+        }
+
+        let currentPart = structure[currentPartIndex];
+        const isLastPart = currentPartIndex === structure.length - 1;
+
+        if (userId !== currentPart.assigneeUserId) {
+            return this.emitError(client, 'You cannot read this part');
+        }
+        if (position < 0 || position > currentPart.partTextLength) {
+            return this.emitError(client, 'Incorrect reading position');
+        }
+
+        let newPartIndex = currentPartIndex;
+        let newPosition = position;
+
+        if (!isLastPart && position === currentPart.partTextLength) {
+            newPartIndex++;
+            currentPart = structure[newPartIndex];
+            newPosition = 0;
+        }
+
+        session.currentReadingPosition = { partId: currentPart.partId, position: newPosition };
+        await this.setActiveSession(presentationId, session);
+
+        client.broadcast
+            .to(room)
+            .emit('reading_position', new ReadingPositionDto(currentPart.partId, newPosition));
+
+        if (newPartIndex === structure.length - 1
+            && currentPart.partTextLength === newPosition) {
+            const part = await this.presentationPartRepository.findOne({
+                where: { presentationPartId: currentPart.partId },
+            });
+            if (part) {
+                await this.stopPresentation(part.presentationId);
+            }
+        }
+    }
+
+    @SubscribeMessage('recorded_videos_count')
+    async handleRecordedVideos(
+        @MessageBody() data: { presentationId: number, notUploadedVideosInPresentation: number },
         @ConnectedSocket() client: TeleprompterSocket,
     ) {
         const userId = client.data.user?.id;
-        if (!userId) return;
+        if (!userId) {
+            return;
+        }
 
-        const room = this.getRoomName(data.presentationId);
+        if (!Array.from(this.joinedUsers.get(data.presentationId) ?? []).find(user => user.userId === userId)) {
+            return this.emitError(client, 'You are not joined');
+        }
+
         const session = await this.getActiveSession(data.presentationId);
         if (!session) {
-            client.emit('error', 'No active session');
-            return;
+            return this.emitError(client, 'No active session');
         }
 
-        if (!session.currentPresentationStartDate) {
-            client.emit('error', 'Presentation is not started');
-            return;
+        let userRecordedVideos = session.userRecordedVideos.find(videos => videos.userId === userId);
+        if (userRecordedVideos) {
+            userRecordedVideos.recordedVideosCount = data.notUploadedVideosInPresentation;
+        } else {
+            userRecordedVideos = new UserRecordedVideosDto(userId, data.notUploadedVideosInPresentation);
+            session.userRecordedVideos.push(userRecordedVideos);
         }
-
-        let currentPart = session.structure.find(part => part.partId == session.currentReadingPosition.partId)!;
-        let currentPartIndex = session.structure.indexOf(currentPart);
-        let isLastPart = currentPartIndex == session.structure.length - 1;
-        if (!isLastPart && session.currentReadingPosition.position == currentPart.partTextLength) {
-            currentPart = session.structure[++currentPartIndex];
-            isLastPart = currentPartIndex == session.structure.length - 1;
-        }
-
-        if (userId != currentPart.assigneeUserId) {
-            client.emit('error', 'You cannot read this part');
-            return;
-        }
-
-        if (data.position < 0 || data.position > currentPart.partTextLength) {
-            client.emit('error', 'Incorrect reading position');
-            return;
-        }
-
-        session.currentReadingPosition = {
-            partId: currentPart.partId,
-            position: data.position
-        };
-
         await this.setActiveSession(data.presentationId, session);
-        client.broadcast.to(room).emit('reading_position', new ReadingPositionDto(currentPart.partId, data.position));
+        await this.emitRecordedVideosCountChange(data.presentationId, userId, data.notUploadedVideosInPresentation);
+    }
 
-        if (isLastPart && currentPart.partTextLength == session.currentReadingPosition.position) {
-            const part = (await this.presentationPartRepository.findOne({
-                where: {presentationPartId: currentPart.partId}
-            }))!;
-            await this.stopPresentation(part.presentationId)
-        }
+
+    private emitError(client: TeleprompterSocket, message: string) {
+        return client.emit('error', message);
     }
 
     private async getActiveSession(presentationId: number): Promise<ActivePresentationDto | undefined> {
@@ -276,10 +361,13 @@ export class TeleprompterGateway extends BaseGateway implements OnGatewayDisconn
         presentationId: number,
     ): Promise<ActivePresentationWithUsersDto | null> {
         const activePresentation = await this.getActiveSession(presentationId);
-        const joinedUserIds = Array.from(this.joinedUsers.get(presentationId) ?? []);
+        const joinedUsers = Array.from(this.joinedUsers.get(presentationId) ?? []);
+        if(!activePresentation) {
+            return null;
+        }
         return {
-            activePresentation,
-            joinedUserIds,
+            ...activePresentation,
+            joinedUsers,
         };
     }
 
@@ -302,5 +390,47 @@ export class TeleprompterGateway extends BaseGateway implements OnGatewayDisconn
 
         session.currentPresentationStartDate = undefined;
         await this.setActiveSession(presentationId, session);
+    }
+
+    async changeJoinedUserRecordingMode(
+        userId: number,
+        presentationId: number,
+        isActive: boolean
+    ): Promise<void> {
+        const joinedUsers = this.joinedUsers.get(presentationId);
+        if (!joinedUsers) {
+            throw new NotFoundException("User has not joined");
+        }
+
+        let targetUser: JoinedUserDto | undefined;
+        for (const userDto of joinedUsers) {
+            if (userDto.userId === userId) {
+                targetUser = userDto;
+                break;
+            }
+        }
+        if (!targetUser) {
+            throw new NotFoundException("User has not joined");
+        }
+
+        const activeSession = await this.getActiveSession(presentationId);
+        if (!activeSession) {
+            throw new NotFoundException("Session has not been started");
+        }
+
+        if (activeSession.currentPresentationStartDate) {
+            const { partId: currentPartId } = activeSession.currentReadingPosition;
+            const currentPart = activeSession.structure.find(
+                part => part.partId === currentPartId
+            );
+            if (currentPart?.assigneeUserId === userId) {
+                throw new ConflictException(
+                    "You cannot change recording mode when your part is active"
+                );
+            }
+        }
+
+        targetUser.isRecordingModeActive = isActive;
+        this.emitRecordingModeChange(presentationId, userId, isActive)
     }
 }

@@ -5,3 +5,5 @@ export const VERIFICATION_CODE_LENGTH = 6;
 export const DEFAULT_PRESENTATION_NAME = 'Виступ без назви';
 export const DEFAULT_PRESENTATION_PART_NAME = 'Частина без назви';
 export const GOLDEN_RATIO = 0.618033988749895;
+export const FREE_VIDEOS_PER_PRESENTATION = 10;
+export const MAX_FREE_VIDEO_DURATION_MIN = 10;
