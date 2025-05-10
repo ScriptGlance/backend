@@ -1,6 +1,6 @@
 import {ActivePresentationDto} from "./ActivePresentationDto";
+import {JoinedUserDto} from "./JoinedUserDto";
 
-export class ActivePresentationWithUsersDto {
-    activePresentation?: ActivePresentationDto;
-    joinedUserIds: number[];
+export class ActivePresentationWithUsersDto extends ActivePresentationDto {
+    joinedUsers: JoinedUserDto[];
 }

@@ -16,6 +16,8 @@ import {MulterModule} from "@nestjs/platform-express";
 import {PresentationStartEntity} from "../common/entities/PresentationStartEntity";
 import {VideoEntity} from "../common/entities/VideoEntity";
 import {TeleprompterGateway} from "./teleprompter.gateway";
+import {UserEntity} from "../common/entities/UserEntity";
+import {UserWithPremiumEntity} from "../common/entities/UserWithPremiumEntity";
 
 @Module({
     imports: [
@@ -26,6 +28,8 @@ import {TeleprompterGateway} from "./teleprompter.gateway";
             PresentationPartEntity,
             PresentationStartEntity,
             VideoEntity,
+            UserEntity,
+            UserWithPremiumEntity
         ]),
         AuthModule,
         MulterModule.register({dest: './uploads'})

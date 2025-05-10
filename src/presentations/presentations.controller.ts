@@ -31,6 +31,7 @@ import { promisify } from 'util';
 import * as fs from "node:fs";
 import {Request, Response} from "express";
 import {VideoDto} from "./dto/VideoDto";
+import {ChangeRecordingModeDto} from "./dto/ChangeRecordingModeDto";
 const unlink = promisify(fs.unlink);
 
 @ApiTags('Presentations')
@@ -218,6 +219,7 @@ export class PresentationsController {
         },
       }),
   )
+
   async uploadVideo(
       @Param('id', ParseIntPipe) id: number,
       @GetUser('id') userId: number,
@@ -307,6 +309,23 @@ export class PresentationsController {
       @GetUser('id') userId: number,
       @Param('id', ParseIntPipe) id: number,
   ) {
-    return { data: await this.service.getActivePresentation(userId, id) };
+    return await this.service.getActivePresentation(userId, id);
+  }
+
+  @Put(':id/recording-mode')
+  async changeUserRecordingMode(
+      @GetUser('id') userId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Body() dto: ChangeRecordingModeDto,
+  ) {
+    return await this.service.changeUserRecordingMode(userId, id, dto.is_active);
+  }
+
+  @Get(':id/participants/videos-left')
+  async getParticipantsVideosLeft(
+      @GetUser('id') userId: number,
+      @Param('id', ParseIntPipe) id: number,
+  ) {
+    return await this.service.getParticipantsVideosLeft(userId, id);
   }
 }

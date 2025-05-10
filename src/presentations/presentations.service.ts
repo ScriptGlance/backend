@@ -1,18 +1,19 @@
 import {
+    BadRequestException,
     ConflictException,
     ForbiddenException, HttpException, HttpStatus,
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
 import {InjectRepository} from '@nestjs/typeorm';
-import {IsNull, Repository} from 'typeorm';
+import {Brackets, In, IsNull, Repository} from 'typeorm';
 
 import {PresentationEntity} from '../common/entities/PresentationEntity';
 import {ParticipantEntity} from '../common/entities/ParticipantEntity';
 import {InvitationEntity} from '../common/entities/InvitationEntity';
 import {
     DEFAULT_PRESENTATION_NAME,
-    DEFAULT_PRESENTATION_PART_NAME,
+    DEFAULT_PRESENTATION_PART_NAME, FREE_VIDEOS_PER_PRESENTATION, MAX_FREE_VIDEO_DURATION_MIN,
 } from '../common/Constants';
 
 import {UpdatePresentationDto} from './dto/UpdatePresentationDto';
@@ -51,6 +52,9 @@ import * as fs from "node:fs";
 import {Request, Response} from "express";
 import {ActivePresentationWithUsersDto} from "./dto/ActivePresentationWithUsersDto";
 import {TeleprompterGateway} from "./teleprompter.gateway";
+import {use} from "passport";
+import {UserEntity} from "../common/entities/UserEntity";
+import {VideosLeftDto} from "./dto/VideosLeftDto";
 
 
 ffmpeg.setFfprobePath('ffprobe');
@@ -78,6 +82,10 @@ export class PresentationsService {
         @InjectRepository(PresentationStartEntity)
         private readonly presentationStartRepository: Repository<PresentationStartEntity>,
         private readonly teleprompterGateway: TeleprompterGateway,
+        @InjectRepository(UserEntity)
+        private readonly userRepository: Repository<UserEntity>,
+        @InjectRepository(UserWithPremiumEntity)
+        private readonly userWithPremiumRepository: Repository<UserWithPremiumEntity>,
     ) {
     }
 
@@ -730,44 +738,77 @@ export class PresentationsService {
         if (!presentation) {
             throw new NotFoundException('Presentation not found');
         }
+
         const recordingStart = new Date(dto.startTimestamp);
-        console.log(recordingStart)
         const presentationStart = await this.presentationStartRepository
             .createQueryBuilder('ps')
             .innerJoin('ps.presentation', 'p')
-            .where('p.presentation_id = :pid', {
-                pid: presentation.presentationId,
-            })
+            .where('p.presentation_id = :pid', { pid: presentationId })
             .andWhere('ps.start_date <= :ts', { ts: recordingStart })
             .andWhere('(ps.end_date >= :ts OR ps.end_date IS NULL)', { ts: recordingStart })
             .getOne();
+
         if (!presentationStart) {
-            throw new NotFoundException(
-                'No presentation start matching given timestamp',
+            throw new NotFoundException('No presentation start matching given timestamp');
+        }
+
+        const user = await this.userRepository
+            .createQueryBuilder('u')
+            .leftJoinAndMapOne(
+                'u.userPremium',
+                UserWithPremiumEntity,
+                'prem',
+                'prem.user_id = prem.user_id',
+            )
+            .getOne()
+        const userHasSubscription = user?.userPremium?.has_premium === true;
+
+        if (!userHasSubscription) {
+            const existingVideosCount = await this.videoRepository
+                .createQueryBuilder('v')
+                .innerJoin('v.presentationStart', 'ps')
+                .innerJoin('ps.presentation', 'p')
+                .where('p.presentation_id = :pid', { pid: presentationId })
+                .getCount();
+
+            if (existingVideosCount >= FREE_VIDEOS_PER_PRESENTATION) {
+                throw new ForbiddenException(
+                    `Free users can upload up to ${FREE_VIDEOS_PER_PRESENTATION} videos per presentation`
+                );
+            }
+        }
+
+        const durationMs = await this.probeDurationMs(file.path);
+        if (
+            !userHasSubscription &&
+            durationMs > MAX_FREE_VIDEO_DURATION_MIN * 60 * 1000
+        ) {
+            throw new BadRequestException(
+                `Free videos must be at most ${MAX_FREE_VIDEO_DURATION_MIN} minutes long`
             );
         }
-        const title = `Частина ${dto.partOrder} - ${dto.partName}`;
-        const durationMs = await this.probeDurationMs(file.path);
-        const thumbnail = await this.generateThumbnail(file.path);
+
+        const thumbnailPath = await this.generateThumbnail(file.path);
         const shareCode = this.generatePresentationShareCode();
-        const video = this.videoRepository.create({
+        const videoEntity = this.videoRepository.create({
             presentationStart,
             link: file.path,
-            title,
+            title: `Частина ${dto.partOrder} - ${dto.partName}`,
             duration: durationMs,
-            photoPreviewLink: thumbnail,
+            photoPreviewLink: thumbnailPath,
             shareCode,
             recordingStartDate: recordingStart,
             user: presentation.participants[0].user,
         });
-        await this.videoRepository.save(video);
+        await this.videoRepository.save(videoEntity);
+
         this.presentationsGateway.emitPresentationEvent(
             presentationId,
             PresentationEventType.VideosChanged,
         );
         return {
             error: false,
-            data: this.presentationsMapper.toVideoDto(video),
+            data: this.presentationsMapper.toVideoDto(videoEntity),
         };
     }
 
@@ -934,7 +975,7 @@ export class PresentationsService {
         const presentation = await this.findOneById(presentationId, userId);
 
         const activePresentation = await this.teleprompterGateway.getActivePresentation(presentationId);
-        if (activePresentation?.activePresentation?.currentOwnerUserId !== userId) {
+        if (activePresentation?.currentOwnerUserId !== userId) {
             throw new ForbiddenException('You are not the owner of the presentation or there are no users in the active presentation');
         }
 
@@ -958,7 +999,7 @@ export class PresentationsService {
 
     async stopPresentation(userId: number, presentationId: number): Promise<void> {
         const activePresentation = await this.teleprompterGateway.getActivePresentation(presentationId);
-        if (activePresentation?.activePresentation?.currentOwnerUserId !== userId) {
+        if (activePresentation?.currentOwnerUserId !== userId) {
             throw new ForbiddenException('You are not the owner of the presentation');
         }
 
@@ -978,8 +1019,87 @@ export class PresentationsService {
     async getActivePresentation(
         userId: number,
         presentationId: number,
-    ): Promise<ActivePresentationWithUsersDto | null> {
+    ): Promise<StandardResponse<ActivePresentationWithUsersDto | null>> {
         await this.findOneById(presentationId, userId);
-        return this.teleprompterGateway.getActivePresentation(presentationId);
+        return {
+            data: await this.teleprompterGateway.getActivePresentation(presentationId),
+            error: false,
+        };
+    }
+
+    async changeUserRecordingMode(userId: number, presentationId: number, isActive: boolean): Promise<StandardResponse<void>> {
+        await this.findOneById(presentationId, userId);
+        await this.teleprompterGateway.changeJoinedUserRecordingMode(userId, presentationId, isActive);
+        return {
+            error: false,
+        }
+    }
+
+    async getParticipantsVideosLeft(userId: number, presentationId: number): Promise<StandardResponse<VideosLeftDto[]>> {
+
+            await this.findOneById(presentationId, userId);
+            const activePresentation = await this.teleprompterGateway.getActivePresentation(presentationId);
+            if (activePresentation?.currentOwnerUserId !== userId) {
+            throw new ForbiddenException(
+                'You are not the owner of the presentation or there are no users in the active presentation'
+            );
+        }
+
+        const participants = await this.participantRepository.find({
+            where: { presentationId },
+            relations: ['user'],
+        });
+        const participantUserIds = participants.map(p => p.user.userId);
+        if (participantUserIds.length === 0) {
+            return { error: false, data: [] };
+        }
+
+        const rawCounts = await this.videoRepository
+            .createQueryBuilder('video')
+            .innerJoin('video.presentationStart', 'ps')
+            .innerJoin('ps.presentation', 'p')
+            .innerJoin('video.user', 'u')
+            .leftJoin(
+                UserWithPremiumEntity,
+                'up',
+                'up.user_id = u.user_id AND up.has_premium = true'
+            )
+            .where('p.presentation_id = :presentationId', { presentationId })
+            .andWhere('u.user_id IN (:...participantUserIds)', { participantUserIds })
+            .andWhere('up.user_id IS NULL')
+            .select('u.user_id', 'userId')
+            .addSelect('COUNT(video.video_id)', 'recordedVideosCount')
+            .groupBy('u.user_id')
+            .getRawMany<{ userId: number; recordedVideosCount: string }>();
+
+        const countMap = new Map<number, number>();
+        for (const { userId: uid, recordedVideosCount } of rawCounts) {
+            countMap.set(uid, Number(recordedVideosCount));
+        }
+
+        const premiumRows = await this.userWithPremiumRepository.find({
+            select: ['user_id'],
+            where: {
+                user_id: In(participantUserIds),
+                has_premium: true
+            }
+        });
+        const premiumSet = new Set(premiumRows.map(r => r.user_id));
+
+        const result = participants.map(p => {
+            const uid = p.user.userId;
+            if (premiumSet.has(uid)) {
+                return new VideosLeftDto(uid, null);
+            }
+            const notUploaded = activePresentation.userRecordedVideos
+                .find(v => v.userId === uid)
+                ?.recordedVideosCount ?? 0;
+            const uploaded = countMap.get(uid) ?? 0;
+            const totalRecorded = uploaded + notUploaded;
+            const left = Math.max(FREE_VIDEOS_PER_PRESENTATION - totalRecorded, 0);
+            return new VideosLeftDto(uid, left);
+        });
+
+        return { error: false, data: result };
     }
 }
