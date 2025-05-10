@@ -30,8 +30,9 @@ import {VideoUploadDto} from "./dto/VideoUploadDto";
 import { promisify } from 'util';
 import * as fs from "node:fs";
 import {Request, Response} from "express";
-import {VideoDto} from "./dto/VideoDto";
 import {ChangeRecordingModeDto} from "./dto/ChangeRecordingModeDto";
+import {ChangeActivePartReaderDto} from "./dto/ChangeActivePartReaderDto";
+import {ConfirmActivePartDto} from "./dto/ConfirmActivePartDto";
 const unlink = promisify(fs.unlink);
 
 @ApiTags('Presentations')
@@ -327,5 +328,24 @@ export class PresentationsController {
       @Param('id', ParseIntPipe) id: number,
   ) {
     return await this.service.getParticipantsVideosLeft(userId, id);
+  }
+
+  @Put(':id/active/reader')
+  async sendActivePartChangeReaderConfirmation(
+      @GetUser('id') userId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Body() dto: ChangeActivePartReaderDto,
+  ) {
+    return await this.service.sendActivePartChangeReaderConfirmation(userId, id, dto.new_reader_id);
+  }
+
+  @Post(':id/active/reader/confirm')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async confirmActivePartChangeReader(
+      @GetUser('id') userId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Body() dto: ConfirmActivePartDto,
+  ) {
+    await this.service.confirmActivePartChangeReader(userId, id, dto.is_from_start_position);
   }
 }
