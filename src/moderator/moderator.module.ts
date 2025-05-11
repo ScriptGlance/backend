@@ -4,8 +4,8 @@ import { ModeratorService } from './moderator.service';
 import {TypeOrmModule} from "@nestjs/typeorm";
 import {AuthModule} from "../auth/auth.module";
 import {MulterModule} from "@nestjs/platform-express";
-import {ModeratorEntity} from "../common/entities/ModeratorEntity";
 import {ModeratorMapper} from "./moderator.mapper";
+import {ModeratorEntity} from "../common/entities/ModeratorEntity";
 
 @Module({
   controllers: [ModeratorController],

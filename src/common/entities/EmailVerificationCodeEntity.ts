@@ -12,7 +12,7 @@ export class EmailVerificationCodeEntity {
   expiresAt: Date;
 
   @Column({ name: 'verification_code', length: 10 })
-  verification_code: string;
+  verificationCode: string;
 
   @Column({ name: 'is_verified' })
   isVerified: boolean;

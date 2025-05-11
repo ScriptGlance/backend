@@ -16,14 +16,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { PresentationEventDto } from './dto/PresentationEventDto';
 import { PresentationEventType } from '../common/enum/PresentationEventType';
 import { SocketData } from '../common/interface/SocketData';
-import { BaseGateway } from '../common/base/base.gateway';
+import {BasePresentationGateway} from "../common/base/basePresentation.gateway";
 
 type Socket = BaseSocket<any, any, any, SocketData>;
 
 @WebSocketGateway({ cors: true })
 @Injectable()
 export class PresentationsGateway
-  extends BaseGateway
+  extends BasePresentationGateway
   implements OnGatewayDisconnect, OnGatewayInit
 {
   private server: Server;

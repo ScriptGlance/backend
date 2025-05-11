@@ -27,6 +27,7 @@ import { SocketData } from '../common/interface/SocketData';
 import { BaseGateway } from '../common/base/base.gateway';
 import { PartEventDto } from './dto/PartEventDto';
 import {PresentationStartEntity} from "../common/entities/PresentationStartEntity";
+import {BasePresentationGateway} from "../common/base/basePresentation.gateway";
 
 type Socket = BaseSocket<any, any, any, SocketData>;
 
@@ -35,7 +36,7 @@ type Socket = BaseSocket<any, any, any, SocketData>;
  */
 @WebSocketGateway({ cors: true })
 export class PartsGateway
-  extends BaseGateway
+  extends BasePresentationGateway
   implements OnGatewayDisconnect, OnModuleInit, OnModuleDestroy
 {
   @WebSocketServer()

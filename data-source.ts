@@ -14,6 +14,8 @@ import {UserWithPremiumEntity} from './src/common/entities/UserWithPremiumEntity
 import {SubscriptionEntity} from './src/common/entities/SubscriptionEntity';
 import {PresentationStartEntity} from "./src/common/entities/PresentationStartEntity";
 import {VideoEntity} from "./src/common/entities/VideoEntity";
+import {ChatMessageEntity} from "./src/common/entities/ChatMessageEntity";
+import {ChatEntity} from "./src/common/entities/ChatEntity";
 
 export const dataSourceOptions: DataSourceOptions = {
     type: 'postgres',
@@ -36,6 +38,8 @@ export const dataSourceOptions: DataSourceOptions = {
         SubscriptionEntity,
         PresentationStartEntity,
         VideoEntity,
+        ChatEntity,
+        ChatMessageEntity
     ],
     migrations: ['dist/src/migrations/*.js'],
     synchronize: false,

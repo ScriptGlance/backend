@@ -9,6 +9,7 @@ import { ParticipantEntity } from './ParticipantEntity';
 import { SubscriptionEntity } from './SubscriptionEntity';
 import { UserWithPremiumEntity } from './UserWithPremiumEntity';
 import {VideoEntity} from "./VideoEntity";
+import {ChatEntity} from "./ChatEntity";
 
 @Entity('user')
 export class UserEntity {
@@ -58,4 +59,7 @@ export class UserEntity {
 
   @OneToMany(() => VideoEntity, (video) => video.user)
   videos: VideoEntity[];
+
+  @OneToMany(() => ChatEntity, (assignedChat) => assignedChat.user)
+  chats: ChatEntity[];
 }

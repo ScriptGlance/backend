@@ -1,4 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import {Entity, PrimaryGeneratedColumn, Column, OneToOne, OneToMany} from 'typeorm';
+import {PresentationEntity} from "./PresentationEntity";
+import {ChatEntity} from "./ChatEntity";
 
 @Entity('moderator')
 export class ModeratorEntity {
@@ -31,4 +33,7 @@ export class ModeratorEntity {
 
   @Column({ name: 'access_token', nullable: true })
   accessToken?: string;
+
+  @OneToMany(() => ChatEntity, (assignedChat) => assignedChat.assignedModerator)
+  assignedChats: ChatEntity[];
 }
