@@ -421,6 +421,7 @@ export class AuthService {
         });
         break;
       case Role.Moderator:
+         console.log('Fetching moderator by email:', email);
         account = await this.moderatorRepository.findOne({
           where: { email },
         });
@@ -431,6 +432,7 @@ export class AuthService {
         });
         break;
     }
+    console.log('account', account);
     return account;
   }
 
