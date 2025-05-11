@@ -1,4 +1,4 @@
-import {UserDto} from "./UserDto";
+import {UserDto} from "../../user/dto/UserDto";
 import {PresentationStartDto} from "./PresentationStartDto";
 
 export class VideoDto {
