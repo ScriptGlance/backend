@@ -10,6 +10,7 @@ import {ServeStaticModule} from "@nestjs/serve-static";
 import { join } from 'path';
 import { SharedVideoModule } from './shared-video/shared-video.module';
 import { UserModule } from './user/user.module';
+import { ModeratorModule } from './moderator/moderator.module';
 
 
 @Module({
@@ -44,6 +45,7 @@ import { UserModule } from './user/user.module';
     }),
     SharedVideoModule,
     UserModule,
+    ModeratorModule,
   ],
 })
 export class AppModule {}
