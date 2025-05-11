@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
@@ -36,10 +34,16 @@ import { UserModule } from './user/user.module';
         maxAge: '1h',
       },
     }),
+    ServeStaticModule.forRoot({
+      serveRoot: '/avatars',
+      rootPath: join(process.cwd(), 'uploads', 'avatars'),
+      serveStaticOptions: {
+        index: false,
+        maxAge: '1h',
+      },
+    }),
     SharedVideoModule,
     UserModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

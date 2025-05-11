@@ -18,6 +18,7 @@ import {VideoEntity} from "../common/entities/VideoEntity";
 import {TeleprompterGateway} from "./teleprompter.gateway";
 import {UserEntity} from "../common/entities/UserEntity";
 import {UserWithPremiumEntity} from "../common/entities/UserWithPremiumEntity";
+import {UserModule} from "../user/user.module";
 
 @Module({
     imports: [
@@ -32,6 +33,7 @@ import {UserWithPremiumEntity} from "../common/entities/UserWithPremiumEntity";
             UserWithPremiumEntity
         ]),
         AuthModule,
+        UserModule,
         MulterModule.register({dest: './uploads'})
     ],
     controllers: [PresentationsController],

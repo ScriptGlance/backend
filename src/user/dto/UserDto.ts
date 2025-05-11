@@ -5,10 +5,10 @@ export class UserDto {
   user_id: number;
 
   @ApiProperty({ description: 'First name' })
-  name: string;
+  first_name: string;
 
   @ApiProperty({ description: 'Last name' })
-  surname: string;
+  last_name: string;
 
   @ApiProperty({
     description: 'Avatar URL',

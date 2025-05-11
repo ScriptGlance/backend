@@ -1,6 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { UserEntity } from '../common/entities/UserEntity';
-import { UserDto } from './dto/UserDto';
 import { ParticipantEntity } from '../common/entities/ParticipantEntity';
 import { ParticipantDto } from './dto/ParticipantDto';
 import { PresentationEntity } from '../common/entities/PresentationEntity';
@@ -12,24 +10,17 @@ import { StructureItemDto } from './dto/StructureItemDto';
 import { PartDto } from './dto/PartDto';
 import {VideoEntity} from "../common/entities/VideoEntity";
 import {VideoDto} from "./dto/VideoDto";
+import {UserMapper} from "../user/user.mapper";
 
 @Injectable()
 export class PresentationMapper {
-  toUserDto(user: UserEntity): UserDto {
-    return {
-      avatar: user.avatar,
-      user_id: user.userId,
-      name: user.firstName,
-      surname: user.lastName,
-      has_premium: user.userPremium?.has_premium ?? false,
-    };
-  }
+  constructor(private readonly userMapper: UserMapper) {}
 
   toParticipantDto(participant: ParticipantEntity): ParticipantDto {
     return {
       participant_id: participant.participantId,
       color: participant.color,
-      user: this.toUserDto(participant.user),
+      user: this.userMapper.toUserDto(participant.user),
     };
   }
 
@@ -39,7 +30,7 @@ export class PresentationMapper {
       name: presentation.name,
       created_at: presentation.createdAt,
       modified_at: presentation.modifiedAt,
-      owner: this.toUserDto(presentation.owner.user),
+      owner: this.userMapper.toUserDto(presentation.owner.user),
     };
   }
 
@@ -62,7 +53,7 @@ export class PresentationMapper {
       part_order: part.order,
       words_count: wordsCount,
       text_preview: part.text.slice(0, 100),
-      assignee: this.toUserDto(part.assignee.user),
+      assignee: this.userMapper.toUserDto(part.assignee.user),
     };
   }
 
@@ -82,7 +73,7 @@ export class PresentationMapper {
       video_title: video.title,
       video_duration: video.duration,
       video_thumbnail: '/' + video.photoPreviewLink.replace('uploads/', ''),
-      video_author: this.toUserDto(video.user),
+      video_author: this.userMapper.toUserDto(video.user),
       presentation_start: {
         start_date: video.presentationStart.startDate,
         end_date: video.presentationStart.endDate,
