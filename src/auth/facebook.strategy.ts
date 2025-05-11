@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { SocialAccountDto } from './dto/GoogleAccountDto';
 import { Role } from '../common/enum/Role';
 import { ErrorWithRedirectException } from '../common/exception/ErrorWithRedirectException';
+import { Request } from 'express';
 
 @Injectable()
 export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
@@ -24,14 +25,22 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
   }
 
   async validate(
-    request: any,
+    request: Request,
     accessToken: string,
     refreshToken: string,
-    profile: any,
+    profile: {
+      name: {
+        familyName: string;
+        givenName: string;
+      };
+      emails: { value: string }[];
+      photos: { value: string }[];
+    },
     done: (error: any, user?: any) => void,
   ) {
     const { name, emails, photos } = profile;
-    const role: Role = request.query.role || Role.User;
+    const rawState = request.query.state as string;
+    const role: Role = rawState ? (rawState as Role) : Role.User;
 
     if (!emails) {
       return done(
