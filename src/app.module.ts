@@ -11,6 +11,7 @@ import { RedisModule } from '@nestjs-modules/ioredis';
 import {ServeStaticModule} from "@nestjs/serve-static";
 import { join } from 'path';
 import { SharedVideoModule } from './shared-video/shared-video.module';
+import { UserModule } from './user/user.module';
 
 
 @Module({
@@ -36,6 +37,7 @@ import { SharedVideoModule } from './shared-video/shared-video.module';
       },
     }),
     SharedVideoModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],
