@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { UserEntity } from '../common/entities/UserEntity';
 import {ModeratorDto} from "./dto/ModeratorDto";
 import {ModeratorEntity} from "../common/entities/ModeratorEntity";
 @Injectable()

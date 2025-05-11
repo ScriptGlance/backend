@@ -11,6 +11,7 @@ import { join } from 'path';
 import { SharedVideoModule } from './shared-video/shared-video.module';
 import { UserModule } from './user/user.module';
 import { ModeratorModule } from './moderator/moderator.module';
+import { ChatModule } from './chat/chat.module';
 
 
 @Module({
@@ -46,6 +47,7 @@ import { ModeratorModule } from './moderator/moderator.module';
     SharedVideoModule,
     UserModule,
     ModeratorModule,
+    ChatModule,
   ],
 })
 export class AppModule {}

@@ -41,13 +41,14 @@ import { PartReassignRequiredEventDto } from './dto/PartReassignRequiredEventDto
 import { WaitingForUserEventDto } from './dto/WaitingForUserEventDto';
 import { PartReadingConfirmationRequiredEventDto } from './dto/PartReadingConfirmationRequiredEventDto';
 import { TIME_TO_CONFIRM_PART_READING_SECONDS } from '../common/Constants';
+import {BasePresentationGateway} from "../common/base/basePresentation.gateway";
 
 type TeleprompterSocketData = { user?: { id: number } };
 type TeleprompterSocket = Socket & { data: TeleprompterSocketData };
 
 @WebSocketGateway({ cors: true })
 export class TeleprompterGateway
-  extends BaseGateway
+  extends BasePresentationGateway
   implements OnGatewayDisconnect, OnModuleInit
 {
   @WebSocketServer()

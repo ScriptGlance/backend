@@ -271,7 +271,7 @@ export class AuthService {
     const code = this.emailVerificationCodeRepository.create({
       email: sendVerificationEmailDto.email,
       expiresAt: expiresAt,
-      verification_code: this.generateVerificationCode(),
+      verificationCode: this.generateVerificationCode(),
       isVerified: false,
     });
     await this.emailService.sendEmail(
@@ -283,7 +283,7 @@ export class AuthService {
           <div style="max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
             <h1 style="color: #333;">Ласкаво просимо до ScriptGlance!</h1>
             <p style="font-size: 16px; color: #555;">
-              Ваш код підтвердження: <strong style="color: #000;">${code.verification_code}</strong>
+              Ваш код підтвердження: <strong style="color: #000;">${code.verificationCode}</strong>
             </p>
             <p style="font-size: 16px; color: #555;">
               Будь ласка, використайте цей код для активації вашого облікового запису.
@@ -317,7 +317,7 @@ export class AuthService {
     const verificationCode = await this.emailVerificationCodeRepository.findOne(
       {
         where: {
-          verification_code: verifyEmailDto.code,
+          verificationCode: verifyEmailDto.code,
           email: verifyEmailDto.email,
         },
       },
