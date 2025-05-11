@@ -1,7 +1,8 @@
-import {ChatMessageDto} from "./ChatMessageDto";
+import { ChatMessageDto } from './ChatMessageDto';
 
 export class ModeratorChatMessageEventDto extends ChatMessageDto {
-    is_new_chat: boolean
-    chat_id: number
-    user_full_name: string
+  is_assigned: boolean;
+  is_new_chat: boolean;
+  chat_id: number;
+  user_full_name: string;
 }
