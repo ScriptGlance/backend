@@ -9,6 +9,8 @@ export class ModeratorMapper {
       moderator_id: moderator.moderatorId,
       first_name: moderator.firstName,
       last_name: moderator.lastName,
+      email: moderator.email,
+      joined_at: moderator.joinedAt,
     };
   }
 }

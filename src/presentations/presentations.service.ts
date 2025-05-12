@@ -258,7 +258,7 @@ export class PresentationsService {
         `You are not the owner of presentation ${id}`,
       );
     }
-    await this.presentationRepository.softDelete(id);
+    await this.presentationRepository.softRemove(presentation);
     return {
       error: false,
     };
@@ -957,7 +957,7 @@ export class PresentationsService {
     await fsPromises.unlink(videoFsPath).catch(() => {});
     await fsPromises.unlink(previewFsPath).catch(() => {});
 
-    await this.videoRepository.softDelete(videoId);
+    await this.videoRepository.softRemove(video);
     this.presentationsGateway.emitPresentationEvent(
       presentation.presentationId,
       PresentationEventType.VideosChanged,
