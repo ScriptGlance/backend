@@ -15,6 +15,8 @@ import {
   WORDS_PER_MINUTE_MIN
 } from "../common/Constants";
 import {join} from "path";
+import {use} from "passport";
+import * as bcrypt from "bcryptjs";
 
 @Injectable()
 export class UserService {
@@ -65,14 +67,24 @@ export class UserService {
       firstName: string,
       lastName: string,
       avatar: Express.Multer.File | null,
+      password: string = '',
   ): Promise<StandardResponse<UserDto>> {
     const user = await this.userRepository.findOne({ where: { userId } });
     if (!user) {
       throw new NotFoundException(`User #${userId} not found`);
     }
 
-    user.firstName = firstName;
-    user.lastName = lastName;
+    if (firstName) {
+      user.firstName = firstName;
+    }
+    if (lastName) {
+      user.lastName = lastName;
+    }
+
+    if (password) {
+      user.password = await bcrypt.hash(password, 10);
+      user.isTemporaryPassword = false;
+    }
 
     if (avatar) {
       if (user.avatar) {

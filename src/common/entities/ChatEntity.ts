@@ -23,7 +23,7 @@ export class ChatEntity {
   @ManyToOne(() => ModeratorEntity, (moderator) => moderator.assignedChats, {
     nullable: true,
   })
-  assignedModerator?: ModeratorEntity;
+  assignedModerator: ModeratorEntity | null;
 
   @ManyToOne(() => UserEntity, (user) => user.chats)
   user: UserEntity;

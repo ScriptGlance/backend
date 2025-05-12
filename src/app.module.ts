@@ -13,6 +13,7 @@ import { UserModule } from './user/user.module';
 import { ModeratorModule } from './moderator/moderator.module';
 import { ChatModule } from './chat/chat.module';
 import {ScheduleModule} from "@nestjs/schedule";
+import { AdminModule } from './admin/admin.module';
 
 
 @Module({
@@ -50,6 +51,7 @@ import {ScheduleModule} from "@nestjs/schedule";
     ModeratorModule,
     ChatModule,
     ScheduleModule.forRoot(),
+    AdminModule,
   ],
 })
 export class AppModule {}
