@@ -12,3 +12,4 @@ export const WORDS_PER_MINUTE_MIN = 300;
 export const MAX_FREE_RECORDING_TIME_SECONDS = 10 * 60;
 export const MAX_FREE_PARTICIPANTS_COUNT = 3;
 export const PREMIUM_PRICE_CENTS = 5 * 100;
+export const CHAT_EXPIRATION_TIME_SECONDS = 3 * 24 * 60 * 60;

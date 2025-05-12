@@ -7,10 +7,11 @@ import {ChatEntity} from "../common/entities/ChatEntity";
 import {ChatMessageEntity} from "../common/entities/ChatMessageEntity";
 import {AuthModule} from "../auth/auth.module";
 import {ChatGateway} from "./chat.gateway";
+import {ChatCleanupService} from "./chat-cleanup.service";
 
 @Module({
   controllers: [ChatController],
-  providers: [ChatService, ChatMapper, ChatGateway],
+  providers: [ChatService, ChatMapper, ChatGateway, ChatCleanupService],
   imports: [
     TypeOrmModule.forFeature([ChatEntity, ChatMessageEntity]),
     AuthModule,
