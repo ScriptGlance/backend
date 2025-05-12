@@ -20,6 +20,12 @@ import { AuthGuard } from '@nestjs/passport';
 import { TokenResponseDto } from './dto/TokenResponseDto';
 import { StandardResponse } from '../common/interface/StandardResponse';
 import { ConfigService } from '@nestjs/config';
+import { GoogleAuthGuard } from './google.guard';
+import { FacebookAuthGuard } from './facebook.guard';
+import { UserEntity } from '../common/entities/UserEntity';
+import { ModeratorEntity } from '../common/entities/ModeratorEntity';
+import { AdminEntity } from '../common/entities/AdminEntity';
+import { Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -28,31 +34,36 @@ export class AuthController {
     private readonly configService: ConfigService,
   ) {}
 
+  @UseGuards(GoogleAuthGuard)
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async googleAuth(@Query('role') role: string) {}
 
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   googleAuthRedirect(
-    @Req() req,
-    @Res() res,
-  ): StandardResponse<TokenResponseDto> {
+    @Req() req: Request & { user: UserEntity | ModeratorEntity | AdminEntity },
+    @Res() res: Response,
+  ) {
     const token = this.authService.generateAuthToken(req.user);
-    return res.redirect(
+    res.redirect(
       `${this.configService.get<string>('SUCCESS_LOGIN_REDIRECT_URL')}?token=${token}`,
     );
   }
 
   @Get('facebook')
-  @UseGuards(AuthGuard('facebook'))
-  async facebookAuth() {}
+  @UseGuards(FacebookAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async facebookAuth(@Query('role') role: string) {}
 
   @Get('facebook/callback')
   @UseGuards(AuthGuard('facebook'))
-  facebookAuthRedirect(@Req() req, @Res() res) {
+  facebookAuthRedirect(
+    @Req() req: Request & { user: UserEntity | ModeratorEntity | AdminEntity },
+    @Res() res: Response,
+  ) {
     const token = this.authService.generateAuthToken(req.user);
-    return res.redirect(
+    res.redirect(
       `${this.configService.get<string>('SUCCESS_LOGIN_REDIRECT_URL')}?token=${token}`,
     );
   }
