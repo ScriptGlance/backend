@@ -1,15 +1,19 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { UserEntity } from './auth/entities/UserEntity';
-import { ModeratorEntity } from './auth/entities/ModeratorEntity';
-import { AdminEntity } from './auth/entities/AdminEntity';
-import { PasswordResetTokenEntity } from './auth/entities/PasswordResetTokenEntity';
-import { EmailVerificationCodeEntity } from './auth/entities/EmailVerificationCodeEntity';
+import { ConfigModule } from '@nestjs/config';
 import { EmailModule } from './email/email.module';
+import { PresentationsModule } from './presentations/presentations.module';
+import { dataSourceOptions } from '../data-source';
+import { RedisModule } from '@nestjs-modules/ioredis';
+import {ServeStaticModule} from "@nestjs/serve-static";
+import { join } from 'path';
+import { SharedVideoModule } from './shared-video/shared-video.module';
+import { UserModule } from './user/user.module';
+import { ModeratorModule } from './moderator/moderator.module';
+import { ChatModule } from './chat/chat.module';
+import {ScheduleModule} from "@nestjs/schedule";
+
 
 @Module({
   imports: [
@@ -17,30 +21,35 @@ import { EmailModule } from './email/email.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_NAME'),
-        entities: [
-          UserEntity,
-          ModeratorEntity,
-          AdminEntity,
-          PasswordResetTokenEntity,
-          EmailVerificationCodeEntity,
-        ],
-        synchronize: configService.get<boolean>('DEBUG'),
-      }),
-      inject: [ConfigService],
+    RedisModule.forRoot({
+      type: 'single',
+      url: process.env.REDIS_URL,
     }),
+    TypeOrmModule.forRoot(dataSourceOptions),
     AuthModule,
     EmailModule,
+    PresentationsModule,
+    ServeStaticModule.forRoot({
+      serveRoot: '/previews',
+      rootPath: join(process.cwd(), 'uploads', 'previews'),
+      serveStaticOptions: {
+        index: false,
+        maxAge: '1h',
+      },
+    }),
+    ServeStaticModule.forRoot({
+      serveRoot: '/avatars',
+      rootPath: join(process.cwd(), 'uploads', 'avatars'),
+      serveStaticOptions: {
+        index: false,
+        maxAge: '1h',
+      },
+    }),
+    SharedVideoModule,
+    UserModule,
+    ModeratorModule,
+    ChatModule,
+    ScheduleModule.forRoot(),
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}
