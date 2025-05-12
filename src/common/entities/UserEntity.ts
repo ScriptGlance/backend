@@ -3,7 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   OneToMany,
-  OneToOne, DeleteDateColumn,
+  OneToOne, DeleteDateColumn, CreateDateColumn, Index,
 } from 'typeorm';
 import { ParticipantEntity } from './ParticipantEntity';
 import { SubscriptionEntity } from './SubscriptionEntity';
@@ -12,6 +12,11 @@ import {VideoEntity} from "./VideoEntity";
 import {ChatEntity} from "./ChatEntity";
 
 @Entity('user')
+@Index(
+    'UQ_user_email_not_deleted',
+    ['email'],
+    { unique: true, where: '"deleted_at" IS NULL' },
+)
 export class UserEntity {
   @PrimaryGeneratedColumn({ name: 'user_id' })
   userId: number;
@@ -25,7 +30,7 @@ export class UserEntity {
   @Column({ name: 'password', length: 255 })
   password: string;
 
-  @Column({ name: 'email', unique: true, length: 100 })
+  @Column({ name: 'email', length: 100 })
   email: string;
 
   @Column({ name: 'avatar', nullable: true })
@@ -45,6 +50,9 @@ export class UserEntity {
 
   @Column({ name: 'access_token', nullable: true })
   accessToken?: string;
+
+  @CreateDateColumn({ name: 'registered_at' })
+  registeredAt: Date;
 
   @DeleteDateColumn({ name: 'deleted_at', nullable: true })
   deletedAt?: Date;

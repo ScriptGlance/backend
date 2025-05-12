@@ -15,5 +15,6 @@ import {ModeratorEntity} from "../common/entities/ModeratorEntity";
     AuthModule,
     MulterModule.register({ dest: './uploads' }),
   ],
+  exports: [ModeratorMapper, ModeratorService],
 })
 export class ModeratorModule {}

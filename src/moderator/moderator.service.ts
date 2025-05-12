@@ -7,6 +7,8 @@ import {join} from "path";
 import {ModeratorDto} from "./dto/ModeratorDto";
 import {ModeratorEntity} from "../common/entities/ModeratorEntity";
 import {ModeratorMapper} from "./moderator.mapper";
+import * as bcrypt from 'bcryptjs';
+
 
 @Injectable()
 export class ModeratorService {
@@ -34,14 +36,22 @@ export class ModeratorService {
         firstName: string,
         lastName: string,
         avatar: Express.Multer.File | null,
+        password: string = '',
     ): Promise<StandardResponse<ModeratorDto>> {
         const moderator = await this.moderatorRepository.findOne({ where: { moderatorId } });
         if (!moderator) {
             throw new NotFoundException(`Moderator #${moderatorId} not found`);
         }
 
-        moderator.firstName = firstName;
-        moderator.lastName = lastName;
+        if (firstName) {
+            moderator.firstName = firstName;
+        }
+        if (lastName) {
+            moderator.lastName = lastName;
+        }
+        if (password) {
+            moderator.password = await bcrypt.hash(password, 10);
+        }
 
         if (avatar) {
             if (moderator.avatar) {

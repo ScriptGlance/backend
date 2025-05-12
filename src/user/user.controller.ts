@@ -44,7 +44,7 @@ export class UserController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['first_name', 'last_name'],
+      required: [],
       properties: {
         avatar: {
           type: 'string',
@@ -52,6 +52,7 @@ export class UserController {
         },
         first_name: { type: 'string' },
         last_name: { type: 'string' },
+        password: { type: 'string' },
       },
     },
   })
@@ -78,9 +79,10 @@ export class UserController {
       @UploadedFile() avatar: Express.Multer.File | null,
       @Body('first_name') firstName: string,
       @Body('last_name') lastName: string,
+      @Body('password') password: string = '',
   ) {
     try {
-      return await this.service.changeProfile(userId, firstName, lastName, avatar);
+      return await this.service.changeProfile(userId, firstName, lastName, avatar, password);
     } catch (err) {
       if (avatar?.path) {
         await unlink(avatar.path).catch(() => {});

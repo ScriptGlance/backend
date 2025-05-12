@@ -10,6 +10,15 @@ export class UserDto {
   @ApiProperty({ description: 'Last name' })
   last_name: string;
 
+  @ApiProperty({ description: 'Email' })
+  email: string;
+
+  @ApiProperty({ description: 'Registered at' })
+  registered_at: Date;
+
+  @ApiProperty({ description: 'Is temporary password' })
+  is_temporary_password: boolean;
+
   @ApiProperty({
     description: 'Avatar URL',
     nullable: true,

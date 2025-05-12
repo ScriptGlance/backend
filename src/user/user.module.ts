@@ -15,6 +15,6 @@ import {UserMapper} from "./user.mapper";
     AuthModule,
     MulterModule.register({ dest: './uploads' }),
   ],
-  exports: [UserMapper],
+  exports: [UserMapper, UserService],
 })
 export class UserModule {}

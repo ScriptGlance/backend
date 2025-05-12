@@ -10,6 +10,12 @@ export class ModeratorDto {
   @ApiProperty({ description: 'Last name' })
   last_name: string;
 
+  @ApiProperty({ description: 'Email' })
+  email: string;
+
+  @ApiProperty({ description: 'Joined at' })
+  joined_at: Date;
+
   @ApiProperty({
     description: 'Avatar URL',
     nullable: true,

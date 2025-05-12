@@ -1,8 +1,22 @@
-import {Entity, PrimaryGeneratedColumn, Column, OneToOne, OneToMany} from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToOne,
+  OneToMany,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Index
+} from 'typeorm';
 import {PresentationEntity} from "./PresentationEntity";
 import {ChatEntity} from "./ChatEntity";
 
 @Entity('moderator')
+@Index(
+    'UQ_moderator_email_not_deleted',
+    ['email'],
+    { unique: true, where: '"deleted_at" IS NULL' },
+)
 export class ModeratorEntity {
   @PrimaryGeneratedColumn({ name: 'moderator_id' })
   moderatorId: number;
@@ -19,7 +33,7 @@ export class ModeratorEntity {
   @Column({ name: 'password', length: 255 })
   password: string;
 
-  @Column({ name: 'email', unique: true, length: 100 })
+  @Column({ name: 'email', length: 100 })
   email: string;
 
   @Column({ name: 'google_id', nullable: true })
@@ -33,6 +47,15 @@ export class ModeratorEntity {
 
   @Column({ name: 'access_token', nullable: true })
   accessToken?: string;
+
+  @CreateDateColumn({ name: 'joined_at' })
+  joinedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt?: Date;
+
+  @Column({ name: 'is_temporary_password', default: false })
+  isTemporaryPassword: boolean;
 
   @OneToMany(() => ChatEntity, (assignedChat) => assignedChat.assignedModerator)
   assignedChats: ChatEntity[];
