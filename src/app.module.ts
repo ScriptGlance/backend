@@ -12,6 +12,7 @@ import { SharedVideoModule } from './shared-video/shared-video.module';
 import { UserModule } from './user/user.module';
 import { ModeratorModule } from './moderator/moderator.module';
 import { ChatModule } from './chat/chat.module';
+import {ScheduleModule} from "@nestjs/schedule";
 
 
 @Module({
@@ -48,6 +49,7 @@ import { ChatModule } from './chat/chat.module';
     UserModule,
     ModeratorModule,
     ChatModule,
+    ScheduleModule.forRoot(),
   ],
 })
 export class AppModule {}

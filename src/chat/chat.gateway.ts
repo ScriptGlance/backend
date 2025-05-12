@@ -15,6 +15,7 @@ import { ModeratorChatMessageEventDto } from './dto/ModeratorChatMessageEventDto
 import { InjectRepository } from '@nestjs/typeorm';
 import { ChatMessageEntity } from '../common/entities/ChatMessageEntity';
 import { ChatMessageDto } from './dto/ChatMessageDto';
+import {ChatDto} from "./dto/ChatDto";
 type ChatSocket = Socket & { data: { user?: { id: number } } };
 
 @WebSocketGateway({ cors: true, namespace: 'chats' })
@@ -93,9 +94,10 @@ export class ChatGateway extends BaseGateway {
     this.server.to(room).emit('new_message', message);
   }
 
-  emitUserChatClosedMessage(userId: number) {
+  emitUserChatClosedMessage(userId: number, chat: ChatDto) {
     const room = this.getUserRoomName(userId);
     this.server.to(room).emit('chat_closed');
+    this.server.to(this.GENERAL_CHATS_ROOM).emit('chat_closed', chat);
   }
 
   emitModeratorMessage(newMessage: ChatMessageEntity) {
