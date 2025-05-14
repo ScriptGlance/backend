@@ -3,20 +3,22 @@ import {
   PrimaryGeneratedColumn,
   Column,
   OneToMany,
-  OneToOne, DeleteDateColumn, CreateDateColumn, Index,
+  OneToOne,
+  DeleteDateColumn,
+  CreateDateColumn,
+  Index,
 } from 'typeorm';
 import { ParticipantEntity } from './ParticipantEntity';
 import { SubscriptionEntity } from './SubscriptionEntity';
 import { UserWithPremiumEntity } from './UserWithPremiumEntity';
-import {VideoEntity} from "./VideoEntity";
-import {ChatEntity} from "./ChatEntity";
+import { VideoEntity } from './VideoEntity';
+import { ChatEntity } from './ChatEntity';
 
 @Entity('user')
-@Index(
-    'UQ_user_email_not_deleted',
-    ['email'],
-    { unique: true, where: '"deleted_at" IS NULL' },
-)
+@Index('UQ_user_email_not_deleted', ['email'], {
+  unique: true,
+  where: '"deleted_at" IS NULL',
+})
 export class UserEntity {
   @PrimaryGeneratedColumn({ name: 'user_id' })
   userId: number;
