@@ -1,11 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { ConfigService } from '@nestjs/config';
 import { StandardResponseExceptionFilter } from './common/filter/StandardResponseExceptionFilter';
 import { ValidationPipe } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -24,6 +24,15 @@ async function bootstrap() {
     }),
   );
 
+  app.use(
+    bodyParser.json({
+      verify: (req: any, _res, buf: Buffer) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        req.rawBody = buf.toString('utf8');
+      },
+    }),
+  );
+
   const config = new DocumentBuilder()
     .setTitle('My API')
     .setDescription('API documentation')
@@ -39,9 +48,12 @@ async function bootstrap() {
     },
   });
 
-  await fs.mkdir(path.join(process.cwd(), 'uploads', 'videos'), { recursive: true });
-  await fs.mkdir(path.join(process.cwd(), 'uploads', 'previews'), { recursive: true });
-
+  await fs.mkdir(path.join(process.cwd(), 'uploads', 'videos'), {
+    recursive: true,
+  });
+  await fs.mkdir(path.join(process.cwd(), 'uploads', 'previews'), {
+    recursive: true,
+  });
 
   await app.listen(process.env.PORT ?? 3000);
 }

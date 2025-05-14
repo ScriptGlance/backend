@@ -4,22 +4,20 @@ import { ChatService } from './chat.service';
 
 @Injectable()
 export class ChatCleanupService {
-    constructor(
-        private readonly chatService: ChatService
-    ) {}
+  constructor(private readonly chatService: ChatService) {}
 
-    @Cron(CronExpression.EVERY_5_MINUTES, {
-        name: 'expireChatsJob',
-    })
-    async handleInactiveChats(): Promise<void> {
-        const expiredChats = await this.chatService.findExpiredChats();
+  @Cron(CronExpression.EVERY_5_MINUTES, {
+    name: 'expireChatsJob',
+  })
+  async handleInactiveChats(): Promise<void> {
+    const expiredChats = await this.chatService.findExpiredChats();
 
-        if (!expiredChats) {
-            return;
-        }
-
-        for (const chat of expiredChats) {
-            await this.chatService.closeActiveChat(chat);
-        }
+    if (!expiredChats) {
+      return;
     }
+
+    for (const chat of expiredChats) {
+      await this.chatService.closeActiveChat(chat);
+    }
+  }
 }

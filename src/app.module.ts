@@ -6,15 +6,15 @@ import { EmailModule } from './email/email.module';
 import { PresentationsModule } from './presentations/presentations.module';
 import { dataSourceOptions } from '../data-source';
 import { RedisModule } from '@nestjs-modules/ioredis';
-import {ServeStaticModule} from "@nestjs/serve-static";
+import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { SharedVideoModule } from './shared-video/shared-video.module';
 import { UserModule } from './user/user.module';
 import { ModeratorModule } from './moderator/moderator.module';
 import { ChatModule } from './chat/chat.module';
-import {ScheduleModule} from "@nestjs/schedule";
+import { ScheduleModule } from '@nestjs/schedule';
 import { AdminModule } from './admin/admin.module';
-
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -52,6 +52,7 @@ import { AdminModule } from './admin/admin.module';
     ChatModule,
     ScheduleModule.forRoot(),
     AdminModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}
