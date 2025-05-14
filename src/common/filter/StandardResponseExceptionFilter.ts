@@ -8,6 +8,7 @@ import {
 import { Response } from 'express';
 import { StandardResponse } from '../interface/StandardResponse';
 import { ErrorCodeHttpException } from '../exception/ErrorCodeHttpException';
+import { ErrorWithRedirectException } from '../exception/ErrorWithRedirectException';
 
 @Catch()
 export class StandardResponseExceptionFilter implements ExceptionFilter {
@@ -38,6 +39,8 @@ export class StandardResponseExceptionFilter implements ExceptionFilter {
       } else {
         message = String(res);
       }
+    } else if (exception instanceof ErrorWithRedirectException) {
+      response.redirect(exception.redirectUrl);
     }
 
     const standardErrorResponse: StandardResponse<any> = {
