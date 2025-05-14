@@ -17,6 +17,7 @@ import { ChatMessageEntity } from './src/common/entities/ChatMessageEntity';
 import { ChatEntity } from './src/common/entities/ChatEntity';
 import { PaymentCardEntity } from './src/common/entities/PaymentCardEntity';
 import { TransactionEntity } from './src/common/entities/TransactionEntity';
+import {UserInvitationEntity} from "./src/common/entities/UserInvitationEntity";
 
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
@@ -43,6 +44,7 @@ export const dataSourceOptions: DataSourceOptions = {
     ChatMessageEntity,
     PaymentCardEntity,
     TransactionEntity,
+    UserInvitationEntity,
   ],
   migrations: ['dist/src/migrations/*.js'],
   synchronize: false,

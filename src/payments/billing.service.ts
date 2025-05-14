@@ -44,7 +44,7 @@ export class BillingService {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  @Cron(CronExpression.EVERY_12_HOURS)
+  @Cron(CronExpression.EVERY_12_HOURS, {name: "billing"})
   async handleDailyBilling() {
     const activeSubscriptions = await this.subscriptionRepository.find({
       where: {
