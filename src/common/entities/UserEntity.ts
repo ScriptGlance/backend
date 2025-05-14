@@ -13,6 +13,7 @@ import { SubscriptionEntity } from './SubscriptionEntity';
 import { UserWithPremiumEntity } from './UserWithPremiumEntity';
 import { VideoEntity } from './VideoEntity';
 import { ChatEntity } from './ChatEntity';
+import { UserInvitationEntity } from './UserInvitationEntity';
 
 @Entity('user')
 @Index('UQ_user_email_not_deleted', ['email'], {
@@ -72,4 +73,7 @@ export class UserEntity {
 
   @OneToMany(() => ChatEntity, (assignedChat) => assignedChat.user)
   chats: ChatEntity[];
+  
+  @OneToMany(() => UserInvitationEntity, (userInvitation) => userInvitation.user)
+  userInvitations: UserInvitationEntity[];
 }
