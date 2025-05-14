@@ -120,9 +120,7 @@ export class PresentationsController {
     @GetUser('id') userId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return {
-      data: { invitationId: await this.service.inviteParticipant(userId, id) },
-    };
+    return await this.service.inviteParticipant(userId, id);
   }
 
   @Post('invitations/:token/accept')
