@@ -13,6 +13,7 @@ import { In, IsNull, Repository } from 'typeorm';
 import { PresentationEntity } from '../common/entities/PresentationEntity';
 import { ParticipantEntity } from '../common/entities/ParticipantEntity';
 import { InvitationEntity } from '../common/entities/InvitationEntity';
+import { UserInvitationEntity } from '../common/entities/UserInvitationEntity';
 import {
   DEFAULT_PRESENTATION_NAME,
   DEFAULT_PRESENTATION_PART_NAME,
@@ -71,6 +72,8 @@ export class PresentationsService {
     private readonly participantRepository: Repository<ParticipantEntity>,
     @InjectRepository(InvitationEntity)
     private readonly invitationRepository: Repository<InvitationEntity>,
+    @InjectRepository(UserInvitationEntity)
+    private readonly userInvitationRepository: Repository<UserInvitationEntity>,
     @InjectRepository(PresentationPartEntity)
     private readonly presentationPartRepository: Repository<PresentationPartEntity>,
     private readonly colorService: ColorService,
@@ -292,34 +295,34 @@ export class PresentationsService {
     userId: number,
     id: number,
   ): Promise<StandardResponse<any>> {
-    const presentationId = await this.participantRepository
-      .createQueryBuilder('participant')
-      .leftJoinAndSelect('participant.presentation', 'presentation')
-      .where('participant.participantId = :id', { id })
-      .getOne()
-      .then((p) => p?.presentation.presentationId);
-
-    const presentation = await this.findOneById(presentationId!, userId);
-    if (presentation.owner.userId !== userId) {
-      throw new ForbiddenException(
-        `You are not the owner of presentation ${id}`,
-      );
-    }
     const participant = await this.participantRepository.findOne({
       where: { participantId: id },
-      relations: ['user'],
+      relations: ['user', 'presentation'],
     });
+    
     if (!participant) {
       throw new NotFoundException(`Participant ${id} not found`);
     }
-    if (participant.user.userId === userId) {
+    
+    const presentationId = participant.presentation.presentationId;
+    const presentation = await this.findOneById(presentationId, userId);
+    
+    if (presentation.owner.userId !== userId) {
       throw new ForbiddenException(
-        `You cannot remove yourself from presentation ${id}`,
+        `You are not the owner of presentation ${presentationId}`,
       );
     }
+    
+    if (participant.user.userId === userId) {
+      throw new ForbiddenException(
+        `You cannot remove yourself from presentation ${presentationId}`,
+      );
+    }
+    
     await this.participantRepository.remove(participant);
+    
     this.presentationsGateway.emitPresentationEvent(
-      presentationId!,
+      presentationId,
       PresentationEventType.ParticipantsChanged,
     );
     return {
@@ -363,6 +366,19 @@ export class PresentationsService {
     });
     if (!invitation) {
       throw new NotFoundException(`Invitation ${code} not found`);
+    }
+
+    const userInvitation = await this.userInvitationRepository.findOne({
+      where: {
+        userId,
+        invitationId: invitation.invitationId
+      }
+    });
+    
+    if (userInvitation) {
+      throw new ForbiddenException(
+        `You have already used this invitation or were removed from this presentation`
+      );
     }
 
     const existingParticipant = await this.participantRepository.findOne({
@@ -414,6 +430,13 @@ export class PresentationsService {
       ),
     });
     await this.participantRepository.save(participant);
+    
+    const newUserInvitation = this.userInvitationRepository.create({
+      userId,
+      invitationId: invitation.invitationId
+    });
+    await this.userInvitationRepository.save(newUserInvitation);
+    
     this.presentationsGateway.emitPresentationEvent(
       invitation.presentation.presentationId,
       PresentationEventType.ParticipantsChanged,
@@ -1208,3 +1231,4 @@ export class PresentationsService {
     };
   }
 }
+

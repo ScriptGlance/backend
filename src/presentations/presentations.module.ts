@@ -19,6 +19,7 @@ import {TeleprompterGateway} from "./teleprompter.gateway";
 import {UserEntity} from "../common/entities/UserEntity";
 import {UserWithPremiumEntity} from "../common/entities/UserWithPremiumEntity";
 import {UserModule} from "../user/user.module";
+import {UserInvitationEntity} from "../common/entities/UserInvitationEntity";
 
 @Module({
     imports: [
@@ -30,7 +31,8 @@ import {UserModule} from "../user/user.module";
             PresentationStartEntity,
             VideoEntity,
             UserEntity,
-            UserWithPremiumEntity
+            UserWithPremiumEntity,
+            UserInvitationEntity
         ]),
         AuthModule,
         UserModule,
