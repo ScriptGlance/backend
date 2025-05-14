@@ -2,16 +2,18 @@ import { Module } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserEntity } from './entities/UserEntity';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { PasswordResetTokenEntity } from './entities/PasswordResetTokenEntity';
-import { EmailVerificationCodeEntity } from './entities/EmailVerificationCodeEntity';
 import { EmailModule } from '../email/email.module';
-import { ModeratorEntity } from './entities/ModeratorEntity';
-import { AdminEntity } from './entities/AdminEntity';
 import { PassportModule } from '@nestjs/passport';
-import {GoogleStrategy} from "./google.strategy";
+import { FacebookStrategy } from './facebook.strategy';
+import { UserEntity } from '../common/entities/UserEntity';
+import { ModeratorEntity } from '../common/entities/ModeratorEntity';
+import { AdminEntity } from '../common/entities/AdminEntity';
+import { PasswordResetTokenEntity } from '../common/entities/PasswordResetTokenEntity';
+import { EmailVerificationCodeEntity } from '../common/entities/EmailVerificationCodeEntity';
+import { GoogleStrategy } from './google.strategy';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Module({
   imports: [
@@ -32,9 +34,10 @@ import {GoogleStrategy} from "./google.strategy";
       inject: [ConfigService],
     }),
     EmailModule,
-    PassportModule.register({ defaultStrategy: 'google' })
+    PassportModule.register({ defaultStrategy: 'google' }),
   ],
+  exports: [JwtAuthGuard, JwtModule],
   controllers: [AuthController],
-  providers: [AuthService, GoogleStrategy],
+  providers: [AuthService, GoogleStrategy, FacebookStrategy, JwtAuthGuard],
 })
 export class AuthModule {}

@@ -1,12 +1,20 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { ConfigService } from '@nestjs/config';
 import { StandardResponseExceptionFilter } from './common/filter/StandardResponseExceptionFilter';
 import { ValidationPipe } from '@nestjs/common';
+import { promises as fs } from 'fs';
+import * as path from 'path';
+import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    cors: {
+      origin: '*',
+      credentials: true,
+      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    },
+  });
   app.useGlobalFilters(new StandardResponseExceptionFilter());
 
   app.useGlobalPipes(
@@ -16,28 +24,38 @@ async function bootstrap() {
     }),
   );
 
+  app.use(
+    bodyParser.json({
+      verify: (req: any, _res, buf: Buffer) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        req.rawBody = buf.toString('utf8');
+      },
+    }),
+  );
+
   const config = new DocumentBuilder()
     .setTitle('My API')
     .setDescription('API documentation')
     .setVersion('1.0')
-    // Optionally add authentication support or other options:
-    // .addBearerAuth()
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
 
-  SwaggerModule.setup('docs', app, document);
+  SwaggerModule.setup('docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
 
-  const configService = app.get(ConfigService);
-
-  // Print out the desired environment variables
-  console.log('DB_HOST:', configService.get<string>('DB_HOST'));
-  console.log('DB_PORT:', configService.get<number>('DB_PORT'));
-  console.log('DB_USERNAME:', configService.get<string>('DB_USERNAME'));
-  console.log('DB_PASSWORD:', configService.get<string>('DB_PASSWORD'));
-  console.log('DB_NAME:', configService.get<string>('DB_NAME'));
-  console.log('DEBUG:', configService.get<boolean>('DEBUG'));
+  await fs.mkdir(path.join(process.cwd(), 'uploads', 'videos'), {
+    recursive: true,
+  });
+  await fs.mkdir(path.join(process.cwd(), 'uploads', 'previews'), {
+    recursive: true,
+  });
 
   await app.listen(process.env.PORT ?? 3000);
 }
+
 bootstrap();
