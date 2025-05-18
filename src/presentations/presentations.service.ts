@@ -158,11 +158,16 @@ export class PresentationsService {
   }
 
   async getPresentations(
-    userId: number,
-    limit: number,
-    offset: number,
+      userId: number,
+      limit: number,
+      offset: number,
+      search: string, 
+      sort: "byUpdatedAt" | "byName" | "byCreatedAt" | "byParticipantsCount", 
+      owner: "me" | "others" | "all", 
+      lastChange: "today" | "lastWeek" | "lastMonth" | "lastYear" | "allTime", 
+      type: "individual" | "group" | "all"
   ): Promise<StandardResponse<PresentationDto[]>> {
-    const entities = await this.presentationRepository
+    const query = this.presentationRepository
       .createQueryBuilder('presentation')
       .leftJoinAndSelect('presentation.owner', 'owner')
       .leftJoinAndSelect('owner.user', 'ownerUser')
@@ -179,13 +184,88 @@ export class PresentationsService {
         UserWithPremiumEntity,
         'partPrem',
         'partPrem.user_id = participantUser.user_id',
-      )
-      .where('ownerUser.user_id = :userId', { userId })
-      .orWhere('participantUser.user_id = :userId', { userId })
-      .orderBy('presentation.modifiedAt', 'DESC')
-      .skip(offset)
-      .take(limit)
-      .getMany();
+      );
+
+    if (owner === 'me') {
+      query.andWhere('ownerUser.user_id = :userId', { userId });
+    } else if (owner === 'others') {
+      query.andWhere('ownerUser.user_id != :userId', { userId })
+           .andWhere('participantUser.user_id = :userId', { userId });
+    } else {
+      query.andWhere('(ownerUser.user_id = :userId OR participantUser.user_id = :userId)', { userId });
+    }
+
+    if (search && search.trim()) {
+      query.andWhere('presentation.name ILIKE :search', { search: `%${search.trim()}%` });
+    }
+
+    const now = new Date();
+    if (lastChange === 'today') {
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+      query.andWhere('presentation.modifiedAt >= :startDate', { startDate: todayStart });
+    } else if (lastChange === 'lastWeek') {
+      const weekAgo = new Date(now);
+      weekAgo.setDate(now.getDate() - 7);
+      query.andWhere('presentation.modifiedAt >= :startDate', { startDate: weekAgo });
+    } else if (lastChange === 'lastMonth') {
+      const monthAgo = new Date(now);
+      monthAgo.setMonth(now.getMonth() - 1);
+      query.andWhere('presentation.modifiedAt >= :startDate', { startDate: monthAgo });
+    } else if (lastChange === 'lastYear') {
+      const yearAgo = new Date(now);
+      yearAgo.setFullYear(now.getFullYear() - 1);
+      query.andWhere('presentation.modifiedAt >= :startDate', { startDate: yearAgo });
+    }
+
+    if (type === 'individual') {
+      query.andWhere((qb) => {
+        const subQuery = qb
+          .subQuery()
+          .select('COUNT(p.participant_id)')
+          .from(ParticipantEntity, 'p')
+          .where('p.presentation_id = presentation.presentation_id')
+          .getQuery();
+        return `${subQuery} = 1`;
+      });
+    } else if (type === 'group') {
+      query.andWhere((qb) => {
+        const subQuery = qb
+          .subQuery()
+          .select('COUNT(p.participant_id)')
+          .from(ParticipantEntity, 'p')
+          .where('p.presentation_id = presentation.presentation_id')
+          .getQuery();
+        return `${subQuery} > 1`;
+      });
+    }
+
+    switch (sort) {
+      case 'byName':
+        query.orderBy('presentation.name', 'ASC');
+        break;
+      case 'byCreatedAt':
+        query.orderBy('presentation.createdAt', 'DESC');
+        break;
+      case 'byParticipantsCount':
+        query.addSelect(
+          (qb) => qb
+            .select('COUNT(p.participant_id)')
+            .from(ParticipantEntity, 'p')
+            .where('p.presentation_id = presentation.presentation_id'),
+          'participantsCount'
+        )
+        .orderBy('participantsCount', 'DESC');
+        break;
+      case 'byUpdatedAt':
+      default:
+        query.orderBy('presentation.modifiedAt', 'DESC');
+        break;
+    }
+
+    query.skip(offset).take(limit);
+
+    const entities = await query.getMany();
 
     return {
       data: this.presentationsMapper.toPresentationList(entities),

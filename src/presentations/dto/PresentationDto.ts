@@ -16,4 +16,7 @@ export class PresentationDto {
 
   @ApiProperty({ type: () => UserDto })
   owner: UserDto;
+
+  @ApiProperty({ description: 'Count of participants' })
+  participant_count?: number;
 }
