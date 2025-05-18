@@ -64,14 +64,24 @@ export class PresentationsController {
   }
 
   @Get()
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiQuery({ name: 'offset', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number, default: 10 })
+  @ApiQuery({ name: 'offset', required: false, type: Number, default: 0 })
+  @ApiQuery({ name: 'search', required: false, type: String, default: '' })
+  @ApiQuery({ name: 'sort', required: false, type: String, default: 'byUpdatedAt' })
+  @ApiQuery({ name: 'owner', required: false, type: String, default: 'all' })
+  @ApiQuery({ name: 'lastChange', required: false, type: String, default: 'allTime' })
+  @ApiQuery({ name: 'type', required: false, type: String, default: 'all' })
   async getPresentations(
     @GetUser('id') userId: number,
     @Query('limit', ParseIntPipe) limit = 10,
     @Query('offset', ParseIntPipe) offset = 0,
+    @Query('search') search: string = "",
+    @Query('sort') sort: 'byUpdatedAt' | 'byName' | 'byCreatedAt' | 'byParticipantsCount' = 'byUpdatedAt',
+    @Query('owner') owner: 'me' | 'others' | 'all' = 'all',
+    @Query('lastChange') lastChange: 'today' | 'lastWeek' | 'lastMonth' | 'lastYear' | 'allTime' = 'allTime',
+    @Query('type') type: 'individual' | 'group' | 'all' = 'all',
   ) {
-    return await this.service.getPresentations(userId, limit, offset);
+    return await this.service.getPresentations(userId, limit, offset, search, sort, owner, lastChange, type);
   }
 
   @Get(':id')

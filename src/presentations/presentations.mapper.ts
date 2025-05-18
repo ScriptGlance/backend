@@ -31,6 +31,7 @@ export class PresentationMapper {
       created_at: presentation.createdAt,
       modified_at: presentation.modifiedAt,
       owner: this.userMapper.toUserDto(presentation.owner.user),
+      participant_count: presentation.participants.length,
     };
   }
 
