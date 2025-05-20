@@ -138,7 +138,7 @@ export class PresentationsController {
     @GetUser('id') userId: number,
     @Param('token') token: string,
   ) {
-    await this.service.acceptInvitation(userId, token);
+    return await this.service.acceptInvitation(userId, token);
   }
 
   @Get(':id/structure')

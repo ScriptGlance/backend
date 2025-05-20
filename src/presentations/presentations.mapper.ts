@@ -53,7 +53,7 @@ export class PresentationMapper {
       part_name: part.name,
       part_order: part.order,
       words_count: wordsCount,
-      text_preview: part.text.slice(0, 100),
+      text_preview: part.text.slice(0, 300),
       assignee: this.userMapper.toUserDto(part.assignee.user),
     };
   }
