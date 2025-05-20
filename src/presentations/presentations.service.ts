@@ -340,8 +340,19 @@ export class PresentationsService {
         `You are not the owner of presentation ${id}`,
       );
     }
-    Object.assign(presentation, dto);
-    await this.presentationRepository.save(presentation);
+
+    if (!dto.name) {
+      throw new BadRequestException('Presentation name is required');
+    }
+
+    await this.presentationRepository.update(
+      {
+        presentationId: id,
+      },
+      {
+        name: dto.name,
+      },
+    );
     this.presentationsGateway.emitPresentationEvent(
       id,
       PresentationEventType.NameChanged,
