@@ -16,7 +16,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { PresentationEventDto } from './dto/PresentationEventDto';
 import { PresentationEventType } from '../common/enum/PresentationEventType';
 import { SocketData } from '../common/interface/SocketData';
-import {BasePresentationGateway} from "../common/base/basePresentation.gateway";
+import { BasePresentationGateway } from '../common/base/basePresentation.gateway';
 
 type Socket = BaseSocket<any, any, any, SocketData>;
 
@@ -56,7 +56,10 @@ export class PresentationsGateway
       return;
     }
 
-    const presentation = this.getPresentationWithAccessControl(data.presentationId, userId)
+    const presentation = await this.getPresentationWithAccessControl(
+      data.presentationId,
+      userId,
+    );
 
     if (!presentation) {
       client.emit('error', 'Access denied to presentation');
@@ -67,7 +70,6 @@ export class PresentationsGateway
     await client.join(room);
     client.emit('subscribed', { room });
   }
-
 
   emitPresentationEvent(presentationId: number, event: PresentationEventType) {
     const room = `presentation/${presentationId}/events`;
