@@ -60,6 +60,7 @@ import { ActivePresentationWithUsersDto } from './dto/ActivePresentationWithUser
 import { TeleprompterGateway } from './teleprompter.gateway';
 import { UserEntity } from '../common/entities/UserEntity';
 import { VideosLeftDto } from './dto/VideosLeftDto';
+import { AcceptInvitationDto } from './dto/AcceptInvitationDto';
 
 ffmpeg.setFfprobePath('ffprobe');
 
@@ -472,7 +473,7 @@ export class PresentationsService {
   async acceptInvitation(
     userId: number,
     code: string,
-  ): Promise<StandardResponse<any>> {
+  ): Promise<StandardResponse<AcceptInvitationDto>> {
     const invitation = await this.invitationRepository.findOne({
       where: { code },
       relations: ['presentation', 'presentation.owner'],
@@ -556,6 +557,9 @@ export class PresentationsService {
     );
     return {
       error: false,
+      data: {
+        presentation_id: invitation.presentation.presentationId,
+      },
     };
   }
 
