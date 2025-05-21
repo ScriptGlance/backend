@@ -538,7 +538,7 @@ export class PresentationsService {
         'u.userPremium',
         UserWithPremiumEntity,
         'prem',
-        'prem.user_id = prem.user_id',
+        'prem.user_id = u.user_id',
       )
       .where('u.user_id = :id', { id: invitation.presentation.owner.userId })
       .getOne();
@@ -942,7 +942,7 @@ export class PresentationsService {
         'u.userPremium',
         UserWithPremiumEntity,
         'prem',
-        'prem.user_id = prem.user_id',
+        'prem.user_id = u.user_id',
       )
       .getOne();
     const userHasSubscription = user?.userPremium?.has_premium === true;
