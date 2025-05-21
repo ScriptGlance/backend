@@ -73,8 +73,9 @@ export class PresentationsGateway
 
   emitPresentationEvent(presentationId: number, event: PresentationEventType) {
     const room = `presentation/${presentationId}/events`;
-    this.server
-      .to(room)
-      .emit('presentationEvent', new PresentationEventDto(event));
+    const dto: PresentationEventDto = {
+      event_type: event,
+    };
+    this.server.to(room).emit('presentationEvent', dto);
   }
 }
