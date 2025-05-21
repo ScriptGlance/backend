@@ -160,10 +160,11 @@ export class TeleprompterGateway
   }
 
   private async checkOwnerChange(presentationId: number) {
-    const session = (await this.getActiveSession(presentationId))!;
+    const session = await this.getActiveSession(presentationId);
     const currentOwnerUserId = await this.getCurrentOwnerUserId(presentationId);
     if (
       currentOwnerUserId &&
+      session &&
       session.currentOwnerUserId != currentOwnerUserId
     ) {
       session.currentOwnerUserId = currentOwnerUserId;
