@@ -10,12 +10,12 @@ import {
 import { StandardResponse } from '../common/interface/StandardResponse';
 import { CheckoutSubscriptionResponseDto } from './dto/CheckoutSubscriptionResponseDto';
 import {
+  INVOICE_VALIDITY_SECONDS,
   MIN_PAYMENT_AMOUNT,
   PAYMENT_API_REQUEST_BATCH_SIZE,
   PAYMENT_API_REQUEST_INTERVAL_MS,
   PREMIUM_PRICE_CENTS,
   SUBSCRIPTION_FAILURE_PAYMENT_RETRY_COUNT,
-  INVOICE_VALIDITY_SECONDS,
   UAH_CURRENCY_CODE,
   USD_CURRENCY_CODE,
   WEBHOOK_CACHE_EXPIRATION_TIME_MS,
@@ -45,6 +45,8 @@ import { CancelInvoiceRequestDto } from './dto/CancelInvoiceRequestDto';
 import { PaymentsApiService } from './paymentsApi.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { PaymentsGateway } from './payments.gateway';
+import { PaymentEventType } from '../common/enum/PaymentEventType';
 
 @Injectable()
 export class PaymentsService implements OnModuleInit {
@@ -60,6 +62,7 @@ export class PaymentsService implements OnModuleInit {
     private readonly paymentsApiService: PaymentsApiService,
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
+    private readonly paymentsGateway: PaymentsGateway,
   ) {}
 
   private webhookPublicKey = '';
@@ -93,7 +96,11 @@ export class PaymentsService implements OnModuleInit {
           ]),
         ),
       },
-      relations: ['subscription', 'subscription.paymentCard'],
+      relations: [
+        'subscription',
+        'subscription.paymentCard',
+        'subscription.user',
+      ],
     });
 
     if (pendingTransactions.length === 0) {
@@ -228,16 +235,14 @@ export class PaymentsService implements OnModuleInit {
         invoiceId: data.invoiceId,
         modifiedDate: LessThanOrEqual(new Date(data.modifiedDate)),
       },
-      relations: ['subscription', 'subscription.paymentCard'],
+      relations: [
+        'subscription',
+        'subscription.paymentCard',
+        'subscription.user',
+      ],
     });
 
     if (!transaction) {
-      const expiredTransaction = await this.transactionRepository.findOne({
-        where: {
-          invoiceId: data.invoiceId,
-        },
-      });
-      console.log('expiredTransaction', expiredTransaction);
       return;
     }
 
@@ -297,8 +302,6 @@ export class PaymentsService implements OnModuleInit {
       subscription.nextPaymentDate = paymentDate;
       await this.subscriptionRepository.save(subscription);
     }
-
-    console.log('invoice', data);
 
     if (
       data.status === InvoiceStatus.FAILURE &&
@@ -370,6 +373,10 @@ export class PaymentsService implements OnModuleInit {
         maskedNumber: data.paymentInfo?.maskedPan ?? '',
         subscription,
       });
+      this.paymentsGateway.emitPaymentsEvent(
+        subscription.user.userId,
+        PaymentEventType.CARD_LINKED,
+      );
     }
 
     if (
@@ -388,8 +395,26 @@ export class PaymentsService implements OnModuleInit {
       );
     }
 
+    const oldStatus = transaction.status;
+
     transaction.status = data.status;
     await this.transactionRepository.save(transaction);
+
+    const statusesToNotify = [
+      InvoiceStatus.PROCESSING,
+      InvoiceStatus.SUCCESS,
+      InvoiceStatus.FAILURE,
+    ];
+    if (
+      !transaction.isCardUpdating &&
+      transaction.status !== oldStatus &&
+      statusesToNotify.includes(transaction.status)
+    ) {
+      this.paymentsGateway.emitPaymentsEvent(
+        transaction.subscription.user.userId,
+        PaymentEventType.TRANSACTION_UPDATED,
+      );
+    }
   }
 
   private async fetchAndCachePublicKey(update: boolean = false): Promise<void> {
@@ -496,6 +521,10 @@ export class PaymentsService implements OnModuleInit {
       .leftJoin('subscription.user', 'user')
       .where('user.userId = :userId', { userId })
       .andWhere('transaction.isCardUpdating = false')
+      .andWhere('transaction.status IS NOT NULL')
+      .andWhere('transaction.status NOT IN (:...statuses)', {
+        statuses: [InvoiceStatus.CREATED, InvoiceStatus.EXPIRED],
+      })
       .orderBy('transaction.modifiedDate', 'DESC')
       .limit(limit)
       .offset(offset)
