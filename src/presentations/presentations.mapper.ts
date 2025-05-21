@@ -8,9 +8,9 @@ import { InvitationDto } from './dto/InvitationDto';
 import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
 import { StructureItemDto } from './dto/StructureItemDto';
 import { PartDto } from './dto/PartDto';
-import {VideoEntity} from "../common/entities/VideoEntity";
-import {VideoDto} from "./dto/VideoDto";
-import {UserMapper} from "../user/user.mapper";
+import { VideoEntity } from '../common/entities/VideoEntity';
+import { VideoDto } from './dto/VideoDto';
+import { UserMapper } from '../user/user.mapper';
 
 @Injectable()
 export class PresentationMapper {
@@ -64,7 +64,7 @@ export class PresentationMapper {
       part_name: part.name,
       part_text: part.text,
       part_order: part.order,
-      assignee_participant_id: part.assigneeParticipantId,
+      assignee_participant_id: part.assigneeParticipantId ?? undefined,
     };
   }
 
@@ -78,7 +78,7 @@ export class PresentationMapper {
       presentation_start: {
         start_date: video.presentationStart.startDate,
         end_date: video.presentationStart.endDate,
-      }
-    }
+      },
+    };
   }
 }

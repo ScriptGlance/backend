@@ -13,6 +13,9 @@ import { EmailModule } from '../email/email.module';
 import { VideoEntity } from '../common/entities/VideoEntity';
 import { PresentationStartEntity } from '../common/entities/PresentationStartEntity';
 import { PaymentsModule } from '../payments/payments.module';
+import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
+import { ParticipantEntity } from '../common/entities/ParticipantEntity';
+import { PresentationEntity } from '../common/entities/PresentationEntity';
 
 @Module({
   controllers: [AdminController],
@@ -27,6 +30,9 @@ import { PaymentsModule } from '../payments/payments.module';
       ChatEntity,
       PresentationStartEntity,
       VideoEntity,
+      PresentationPartEntity,
+      ParticipantEntity,
+      PresentationEntity,
     ]),
     MulterModule.register({ dest: './uploads' }),
     EmailModule,
