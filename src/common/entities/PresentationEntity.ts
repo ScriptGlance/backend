@@ -22,7 +22,7 @@ export class PresentationEntity {
   name: string;
 
   @Column({ name: 'owner_participant_id', nullable: true })
-  ownerParticipantId?: number;
+  ownerParticipantId: number | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

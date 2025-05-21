@@ -434,11 +434,25 @@ export class PresentationsService {
       );
     }
 
+    await this.presentationPartRepository.update(
+      {
+        presentationId: presentationId,
+        assigneeParticipantId: participant.participantId,
+      },
+      {
+        assigneeParticipantId: presentation.owner.participantId,
+      },
+    );
+
     await this.participantRepository.remove(participant);
 
     this.presentationsGateway.emitPresentationEvent(
       presentationId,
       PresentationEventType.ParticipantsChanged,
+    );
+    this.presentationsGateway.emitPresentationEvent(
+      presentationId,
+      PresentationEventType.TextChanged,
     );
     return {
       error: false,
@@ -780,7 +794,7 @@ export class PresentationsService {
         PartEventType.PartUpdated,
         part.presentationPartId,
         part.order,
-        part.assigneeParticipantId,
+        part.assigneeParticipantId ?? undefined,
       ),
     );
 
