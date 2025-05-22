@@ -944,8 +944,10 @@ export class PresentationsService {
         'prem',
         'prem.user_id = u.user_id',
       )
+      .where('u.user_id = :id', { id: userId })
       .getOne();
     const userHasSubscription = user?.userPremium?.has_premium === true;
+
 
     if (!userHasSubscription) {
       const existingVideosCount = await this.videoRepository
@@ -1137,7 +1139,8 @@ export class PresentationsService {
       .innerJoin('ps.presentation', 'p', 'p.presentationId = :pid', {
         pid: presentationId,
       })
-      .innerJoinAndSelect('video.user', 'u');
+      .innerJoinAndSelect('video.user', 'u')
+      .orderBy('video.recordingStartDate', 'DESC');
 
     if (!isOwner) {
       queryBuilder.andWhere('u.userId = :uid', { uid: userId });
