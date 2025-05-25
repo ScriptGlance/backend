@@ -16,7 +16,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PresentationEntity } from '../common/entities/PresentationEntity';
-import {IsNull, Repository} from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { CursorPositionDto } from './dto/CursorPositionDto';
 import { PartTarget } from '../common/enum/PartTarget';
 import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
@@ -26,8 +26,10 @@ import { TextOperationType } from '../common/enum/TextOperationType';
 import { SocketData } from '../common/interface/SocketData';
 import { BaseGateway } from '../common/base/base.gateway';
 import { PartEventDto } from './dto/PartEventDto';
-import {PresentationStartEntity} from "../common/entities/PresentationStartEntity";
-import {BasePresentationGateway} from "../common/base/basePresentation.gateway";
+import { PresentationStartEntity } from '../common/entities/PresentationStartEntity';
+import { BasePresentationGateway } from '../common/base/basePresentation.gateway';
+import { PresentationsGateway } from './presentations.gateway';
+import { PresentationEventType } from '../common/enum/PresentationEventType';
 
 type Socket = BaseSocket<any, any, any, SocketData>;
 
@@ -49,6 +51,10 @@ export class PartsGateway
   private readonly lock = new Mutex();
   private flushInterval: NodeJS.Timeout;
 
+  private lastTextEventEmitTime = new Map<number, number>();
+  private readonly pendingEmitTimeouts = new Map<number, NodeJS.Timeout>();
+  private readonly TEXT_EVENT_EMIT_INTERVAL_MS = 5000;
+
   constructor(
     jwtService: JwtService,
     configService: ConfigService,
@@ -59,6 +65,7 @@ export class PartsGateway
     @InjectRepository(PresentationStartEntity)
     private readonly presentationStartRepository: Repository<PresentationStartEntity>,
     @InjectRedis() private redis: Redis,
+    private readonly presentationsGateway: PresentationsGateway,
   ) {
     super(jwtService, configService, presentationRepository);
   }
@@ -115,10 +122,11 @@ export class PartsGateway
       return;
     }
     const presentationStart = await this.presentationStartRepository.findOne({
-      where: { presentation, endDate: IsNull() }
+      where: { presentation, endDate: IsNull() },
     });
-    const updateData = target === PartTarget.Text ? { text: content } : { name: content };
-    if(presentationStart) {
+    const updateData =
+      target === PartTarget.Text ? { text: content } : { name: content };
+    if (presentationStart) {
       return;
     }
     await this.presentationPartRepository.update(
@@ -252,19 +260,53 @@ export class PartsGateway
 
       const room = this.getRoomName(presentation.presentationId);
       this.broadcastTextOperation(room, data, userId, data.baseVersion + 1);
+
+      this.maybeEmitTextChangedEvent(presentation.presentationId);
     });
+  }
+
+  private maybeEmitTextChangedEvent(presentationId: number) {
+    const now = Date.now();
+    const lastEmit = this.lastTextEventEmitTime.get(presentationId) || 0;
+
+    if (now - lastEmit >= this.TEXT_EVENT_EMIT_INTERVAL_MS) {
+      this.presentationsGateway.emitPresentationEvent(
+        presentationId,
+        PresentationEventType.TextChanged,
+      );
+      this.lastTextEventEmitTime.set(presentationId, now);
+
+      const existingTimeout = this.pendingEmitTimeouts.get(presentationId);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+        this.pendingEmitTimeouts.delete(presentationId);
+      }
+    } else {
+      if (!this.pendingEmitTimeouts.has(presentationId)) {
+        const delay = this.TEXT_EVENT_EMIT_INTERVAL_MS - (now - lastEmit);
+        const timeout = setTimeout(() => {
+          this.presentationsGateway.emitPresentationEvent(
+            presentationId,
+            PresentationEventType.TextChanged,
+          );
+          this.lastTextEventEmitTime.set(presentationId, Date.now());
+          this.pendingEmitTimeouts.delete(presentationId);
+        }, delay);
+        this.pendingEmitTimeouts.set(presentationId, timeout);
+      }
+    }
   }
 
   private async getPresentationByPartId(partId: number) {
     return this.presentationRepository
-        .createQueryBuilder('presentation')
-        .leftJoinAndSelect('presentation.owner', 'owner')
-        .leftJoinAndSelect('owner.user', 'ownerUser')
-        .leftJoinAndSelect('presentation.participants', 'participant')
-        .leftJoinAndSelect('participant.user', 'participantUser')
-        .leftJoinAndSelect('presentation.parts', 'part')
-        .where('part.presentationPartId = :id', {id: partId})
-        .getOne();
+      .createQueryBuilder('presentation')
+      .leftJoinAndSelect('presentation.owner', 'owner')
+      .leftJoinAndSelect('owner.user', 'ownerUser')
+      .leftJoinAndSelect('presentation.participants', 'participant')
+      .leftJoinAndSelect('participant.user', 'participantUser')
+      .leftJoinAndSelect('presentation.parts', 'part')
+      .where('part.presentationPartId = :id', { id: partId })
+      .getOne();
   }
 
   private getRedisKey(partId: number, target: string): string {
@@ -434,9 +476,7 @@ export class PartsGateway
     this.server.to(room).emit('partEvent', event);
   }
 
-  public async flushPresentationChanges(
-      presentationId: number,
-  ): Promise<void> {
+  public async flushPresentationChanges(presentationId: number): Promise<void> {
     const parts = await this.presentationPartRepository.find({
       where: { presentation: { presentationId } },
     });
@@ -458,12 +498,10 @@ export class PartsGateway
           };
 
           const updateData =
-              target === PartTarget.Text
-                  ? { text: content }
-                  : { name: content };
+            target === PartTarget.Text ? { text: content } : { name: content };
           await this.presentationPartRepository.update(
-              { presentationPartId: part.presentationPartId },
-              updateData,
+            { presentationPartId: part.presentationPartId },
+            updateData,
           );
         }
 
