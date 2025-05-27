@@ -19,4 +19,8 @@ export class OperationComponentDto {
   @IsOptional()
   @IsString()
   text?: string;
+
+  @IsOptional()
+  @IsInt()
+  userId?: number;
 }

@@ -11,4 +11,8 @@ export class PartDto {
   part_order: number;
   @ApiProperty()
   assignee_participant_id?: number;
+  @ApiProperty()
+  part_text_version?: number;
+  @ApiProperty()
+  part_name_version?: number;
 }
