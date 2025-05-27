@@ -58,13 +58,19 @@ export class PresentationMapper {
     };
   }
 
-  toPartDto(part: PresentationPartEntity): PartDto {
+  toPartDto(
+    part: PresentationPartEntity,
+    textVersion?: number,
+    nameVersion?: number,
+  ): PartDto {
     return {
       part_id: part.presentationPartId,
       part_name: part.name,
       part_text: part.text,
       part_order: part.order,
       assignee_participant_id: part.assigneeParticipantId ?? undefined,
+      part_text_version: textVersion,
+      part_name_version: nameVersion,
     };
   }
 

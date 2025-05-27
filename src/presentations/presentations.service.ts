@@ -581,18 +581,22 @@ export class PresentationsService {
     partId: number,
     target: PartTarget,
     fallback: string,
-  ): Promise<string> {
+  ): Promise<{ content: string; version?: number }> {
     const key = `editing:part:${partId}:${target}`;
     const raw = await this.redis.get(key);
-    if (!raw) return fallback;
+    if (!raw) {
+      return {
+        content: fallback,
+      };
+    }
     try {
-      const { content } = JSON.parse(raw) as {
+      const { content, version } = JSON.parse(raw) as {
         content: string;
         version: number;
       };
-      return content;
+      return { content, version };
     } catch {
-      return fallback;
+      return { content: fallback };
     }
   }
 
@@ -623,7 +627,7 @@ export class PresentationsService {
         p.text,
       );
 
-      const words = text
+      const words = text.content
         .trim()
         .split(/\s+/)
         .filter((w) => w.length > 0).length;
@@ -631,7 +635,7 @@ export class PresentationsService {
 
       structure.push(
         this.presentationsMapper.toStructureItemDto(
-          { ...p, name, text },
+          { ...p, name: name.content, text: text.content },
           words,
         ),
       );
@@ -666,7 +670,17 @@ export class PresentationsService {
         p.text,
       );
 
-      result.push(this.presentationsMapper.toPartDto({ ...p, name, text }));
+      result.push(
+        this.presentationsMapper.toPartDto(
+          {
+            ...p,
+            name: name.content,
+            text: text.content,
+          },
+          text.version,
+          name.version,
+        ),
+      );
     }
 
     return { data: result, error: false };
@@ -868,6 +882,7 @@ export class PresentationsService {
     return new Promise((resolve, reject) => {
       ffmpeg.ffprobe(path, (err, metadata) => {
         if (err) {
+          // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
           return reject(err);
         }
         const ms = Math.round((metadata.format.duration ?? 0) * 1000);
@@ -887,7 +902,9 @@ export class PresentationsService {
     try {
       await fsPromises.access(outputPath);
       return outputPath;
-    } catch {}
+    } catch {
+      /* empty */
+    }
 
     return new Promise((resolve, reject) => {
       ffmpeg(videoPath)
@@ -947,7 +964,6 @@ export class PresentationsService {
       .where('u.user_id = :id', { id: userId })
       .getOne();
     const userHasSubscription = user?.userPremium?.has_premium === true;
-
 
     if (!userHasSubscription) {
       const existingVideosCount = await this.videoRepository
