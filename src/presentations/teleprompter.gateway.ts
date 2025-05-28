@@ -7,7 +7,6 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { BaseGateway } from '../common/base/base.gateway';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { JwtService } from '@nestjs/jwt';
@@ -37,11 +36,13 @@ import { RecordingModeChangeDto } from './dto/RecordingModeChangeDto';
 import { UserRecordedVideosDto } from './dto/UserRecordedVideosDto';
 import { RecordedVideosCountChangeEventDto } from './dto/RecordedVideosCountChangeEventDto';
 import { PartReassignReason } from '../common/enum/PartReassignReason';
-import { PartReassignRequiredEventDto } from './dto/PartReassignRequiredEventDto';
 import { WaitingForUserEventDto } from './dto/WaitingForUserEventDto';
 import { PartReadingConfirmationRequiredEventDto } from './dto/PartReadingConfirmationRequiredEventDto';
 import { TIME_TO_CONFIRM_PART_READING_SECONDS } from '../common/Constants';
-import {BasePresentationGateway} from "../common/base/basePresentation.gateway";
+import { BasePresentationGateway } from '../common/base/basePresentation.gateway';
+import { PresentationPartContentService } from './presentation-part-content.service';
+import { PartTarget } from '../common/enum/PartTarget';
+import { retry } from 'rxjs';
 
 type TeleprompterSocketData = { user?: { id: number } };
 type TeleprompterSocket = Socket & { data: TeleprompterSocketData };
@@ -70,6 +71,7 @@ export class TeleprompterGateway
     @InjectRepository(PresentationStartEntity)
     private readonly presentationStartRepository: Repository<PresentationStartEntity>,
     private readonly presentationsGateway: PresentationsGateway,
+    private readonly presentationPartContentService: PresentationPartContentService,
   ) {
     super(jwtService, configService, presentationRepository);
   }
@@ -91,72 +93,84 @@ export class TeleprompterGateway
     @MessageBody() data: { presentationId: number },
     @ConnectedSocket() client: TeleprompterSocket,
   ) {
-    const userId = client.data.user?.id;
-    if (!userId) {
-      client.emit('error', 'User not authenticated');
-      return;
-    }
-    const presentation = await this.getPresentationWithAccessControl(
-      data.presentationId,
-      userId,
-    );
-    if (!presentation) {
-      client.emit('error', 'Access denied to presentation');
-    }
-
-    const room = this.getRoomName(data.presentationId);
-    await client.join(room);
-    if (!this.joinedUsers.has(data.presentationId)) {
-      const users = new Set<JoinedUserDto>();
-      users.add(new JoinedUserDto(userId));
-      this.joinedUsers.set(data.presentationId, users);
-      const session = await this.initializeSessionInRedis(
-        data.presentationId,
-        false,
-      );
-      this.emitOwnerChangeEvent(
-        data.presentationId,
-        session.currentOwnerUserId,
-      );
-    } else {
-      this.joinedUsers.get(data.presentationId)!.add(new JoinedUserDto(userId));
-
-      const session = await this.getActiveSession(data.presentationId);
-      if (!session) {
+    try {
+      const userId = client.data.user?.id;
+      if (!userId) {
+        client.emit('error', 'User not authenticated');
         return;
       }
-      if (
-        session.currentPresentationStartDate &&
-        this.getActiveReaderId(session) === userId
-      ) {
-        await this.emitPartReassignCancelledEvent(data.presentationId);
-        if (session.awaitingConfirmationUserId) {
-          await this.emitPartReadingConfirmationCancelledEvent(
-            data.presentationId,
-            session.awaitingConfirmationUserId,
-          );
-        }
-        await this.emitPartReadingConfirmationRequiredEvent(
-          data.presentationId,
-          userId,
-        );
-
-        session.missingUserId = undefined;
-        await this.setActiveSession(data.presentationId, session);
+      const presentation = await this.getPresentationWithAccessControl(
+        data.presentationId,
+        userId,
+      );
+      if (!presentation) {
+        client.emit('error', 'Access denied to presentation');
       }
 
-      await this.checkOwnerChange(data.presentationId);
-    }
-    client.broadcast
-      .to(room)
-      .emit(
-        'teleprompter_presence',
-        new PresenceDto(userId, PresenceEventType.UserJoined),
+      const room = this.getRoomName(data.presentationId);
+      await client.join(room);
+      if (!this.joinedUsers.has(data.presentationId)) {
+        const users = new Set<JoinedUserDto>();
+        users.add(new JoinedUserDto(userId));
+        this.joinedUsers.set(data.presentationId, users);
+        const session = await this.initializeSessionInRedis(
+          data.presentationId,
+          false,
+        );
+        this.emitOwnerChangeEvent(
+          data.presentationId,
+          session.currentOwnerUserId,
+        );
+      } else {
+        const users = this.joinedUsers.get(data.presentationId)!;
+        if (![...users].some((user) => user.userId === userId)) {
+          this.joinedUsers
+            .get(data.presentationId)!
+            .add(new JoinedUserDto(userId));
+        }
+
+        const session = await this.getActiveSession(data.presentationId);
+        if (!session) {
+          return;
+        }
+        if (
+          session.currentPresentationStartDate &&
+          this.getActiveReaderId(session) === userId
+        ) {
+          await this.emitPartReassignCancelledEvent(data.presentationId);
+          if (session.awaitingConfirmationUserId) {
+            await this.emitPartReadingConfirmationCancelledEvent(
+              data.presentationId,
+              session.awaitingConfirmationUserId,
+            );
+            session.awaitingConfirmationUserId = undefined;
+            await this.setActiveSession(data.presentationId, session);
+          }
+          await this.emitPartReadingConfirmationRequiredEvent(
+            data.presentationId,
+            userId,
+          );
+
+          session.missingUserId = undefined;
+          await this.setActiveSession(data.presentationId, session);
+        }
+
+        await this.checkOwnerChange(data.presentationId);
+      }
+      client.broadcast
+        .to(room)
+        .emit(
+          'teleprompter_presence',
+          new PresenceDto(userId, PresenceEventType.UserJoined),
+        );
+      this.presentationsGateway.emitPresentationEvent(
+        data.presentationId,
+        PresentationEventType.JoinedUsersChanged,
       );
-    this.presentationsGateway.emitPresentationEvent(
-      data.presentationId,
-      PresentationEventType.JoinedUsersChanged,
-    );
+    } catch (error) {
+      console.error('Teleprompter subscribe error:', error);
+      client.emit('error', 'Failed to subscribe to teleprompter');
+    }
   }
 
   private async checkOwnerChange(presentationId: number) {
@@ -270,6 +284,7 @@ export class TeleprompterGateway
 
   private async emitPartReassignRequiredEvent(
     presentationId: number,
+    userId: number,
     partId: number,
     reason: PartReassignReason,
   ) {
@@ -277,10 +292,7 @@ export class TeleprompterGateway
     if (!ownerSocket) {
       return;
     }
-    ownerSocket.emit(
-      'part_reassign_required',
-      new PartReassignRequiredEventDto(partId, reason),
-    );
+    ownerSocket.emit('part_reassign_required', { userId, partId, reason });
   }
 
   private async emitPartReassignCancelledEvent(presentationId: number) {
@@ -319,7 +331,10 @@ export class TeleprompterGateway
     if (!activeReaderId) {
       return;
     }
-    if (this.isUserJoined(presentationId, activeReaderId)) {
+    if (
+      userId != activeReaderId &&
+      this.isUserJoined(presentationId, activeReaderId)
+    ) {
       throw new ConflictException('Active reader is in the presentation');
     }
 
@@ -347,7 +362,8 @@ export class TeleprompterGateway
       new PartReadingConfirmationRequiredEventDto(
         activePartId,
         TIME_TO_CONFIRM_PART_READING_SECONDS,
-        session.currentReadingPosition.position > 0,
+        userId !== activeReaderId &&
+          session.currentReadingPosition.position > 0,
       ),
     );
 
@@ -356,7 +372,7 @@ export class TeleprompterGateway
       if (!session || !session.currentPresentationStartDate) {
         return;
       }
-      await this.checkCurrentReaderAvailability(presentationId, session);
+      await this.checkCurrentReaderAvailability(presentationId, session, true);
     }, TIME_TO_CONFIRM_PART_READING_SECONDS * 1000);
   }
 
@@ -402,11 +418,22 @@ export class TeleprompterGateway
       relations: ['assignee.user'],
       order: { order: 'ASC' },
     });
-    const structure: PartStructureDto[] = parts.map((item) => ({
-      partId: item.presentationPartId,
-      partTextLength: item.text.length,
-      assigneeUserId: item.assignee.user.userId,
-    }));
+
+    const structure: PartStructureDto[] = await Promise.all(
+      parts.map(async (part) => {
+        const text =
+          await this.presentationPartContentService.getPresentationPartContent(
+            part.presentationPartId,
+            PartTarget.Text,
+            part.text,
+          );
+        return {
+          partId: part.presentationPartId,
+          partTextLength: text.content.length,
+          assigneeUserId: part.assignee.user.userId,
+        };
+      }),
+    );
 
     const lastSession = await this.getActiveSession(presentationId);
 
@@ -465,6 +492,14 @@ export class TeleprompterGateway
       return this.emitError(client, 'Presentation is not started');
     }
 
+    if (
+      !Array.from(this.joinedUsers.get(presentationId) ?? []).find(
+        (user) => user.userId === userId,
+      )
+    ) {
+      return this.emitError(client, 'You are not joined');
+    }
+
     const { structure, currentReadingPosition } = session;
     const currentPartIndex = structure.findIndex(
       (p) => p.partId === currentReadingPosition.partId,
@@ -479,14 +514,14 @@ export class TeleprompterGateway
     if (userId !== currentPart.assigneeUserId) {
       return this.emitError(client, 'You cannot read this part');
     }
-    if (position < 0 || position > currentPart.partTextLength) {
+    if (position < 0 || position >= currentPart.partTextLength) {
       return this.emitError(client, 'Incorrect reading position');
     }
 
     let newPartIndex = currentPartIndex;
     let newPosition = position;
 
-    if (!isLastPart && position === currentPart.partTextLength) {
+    if (!isLastPart && position === currentPart.partTextLength - 1) {
       newPartIndex++;
       currentPart = structure[newPartIndex];
       newPosition = 0;
@@ -499,7 +534,7 @@ export class TeleprompterGateway
     await this.setActiveSession(presentationId, session);
     await this.checkCurrentReaderAvailability(presentationId, session);
 
-    client.broadcast
+    this.server
       .to(room)
       .emit(
         'reading_position',
@@ -508,7 +543,7 @@ export class TeleprompterGateway
 
     if (
       newPartIndex === structure.length - 1 &&
-      currentPart.partTextLength === newPosition
+      currentPart.partTextLength === newPosition - 1
     ) {
       const part = await this.presentationPartRepository.findOne({
         where: { presentationPartId: currentPart.partId },
@@ -621,6 +656,10 @@ export class TeleprompterGateway
     }
 
     session.currentPresentationStartDate = undefined;
+    session.currentReadingPosition = {
+      partId: session.structure[0]?.partId ?? 0,
+      position: 0,
+    };
     await this.setActiveSession(presentationId, session);
   }
 
@@ -669,6 +708,7 @@ export class TeleprompterGateway
   private async checkCurrentReaderAvailability(
     presentationId: number,
     session: ActivePresentationDto,
+    isTimeout: boolean = false,
   ) {
     const currentReaderId = this.getActiveReaderId(session);
     const hasPresentationStarted = Boolean(
@@ -702,10 +742,13 @@ export class TeleprompterGateway
 
     await this.emitPartReassignRequiredEvent(
       presentationId,
+      awaitingId ?? currentReaderId,
       session.currentReadingPosition.partId,
-      PartReassignReason.MissingAssignee,
+      isTimeout
+        ? PartReassignReason.AssigneeNotResponding
+        : PartReassignReason.MissingAssignee,
     );
-    await this.emitWaitingForUserEvent(presentationId, currentReaderId);
+    this.emitWaitingForUserEvent(presentationId, currentReaderId);
   }
 
   private isUserJoined(presentationId: number, userId: number): boolean {
