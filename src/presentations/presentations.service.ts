@@ -42,8 +42,6 @@ import { PartUpdateDto } from './dto/PartUpdateDto';
 import { CursorPositionDto } from './dto/CursorPositionDto';
 import { PartsGateway } from './parts.gateway';
 import { PartTarget } from '../common/enum/PartTarget';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import Redis from 'ioredis';
 import { StructureItemDto } from './dto/StructureItemDto';
 import { PartEventDto } from './dto/PartEventDto';
 import { PartEventType } from '../common/enum/PartEventType';
@@ -61,6 +59,7 @@ import { TeleprompterGateway } from './teleprompter.gateway';
 import { UserEntity } from '../common/entities/UserEntity';
 import { VideosLeftDto } from './dto/VideosLeftDto';
 import { AcceptInvitationDto } from './dto/AcceptInvitationDto';
+import { PresentationPartContentService } from './presentation-part-content.service';
 
 ffmpeg.setFfprobePath('ffprobe');
 
@@ -81,8 +80,7 @@ export class PresentationsService {
     private readonly presentationsMapper: PresentationMapper,
     private readonly presentationsGateway: PresentationsGateway,
     private readonly partsGateway: PartsGateway,
-    @InjectRedis()
-    private readonly redis: Redis,
+    private readonly presentationPartContentService: PresentationPartContentService,
     @InjectRepository(VideoEntity)
     private readonly videoRepository: Repository<VideoEntity>,
     @InjectRepository(PresentationStartEntity)
@@ -577,29 +575,6 @@ export class PresentationsService {
     };
   }
 
-  private async getPresentationPartContent(
-    partId: number,
-    target: PartTarget,
-    fallback: string,
-  ): Promise<{ content: string; version?: number }> {
-    const key = `editing:part:${partId}:${target}`;
-    const raw = await this.redis.get(key);
-    if (!raw) {
-      return {
-        content: fallback,
-      };
-    }
-    try {
-      const { content, version } = JSON.parse(raw) as {
-        content: string;
-        version: number;
-      };
-      return { content, version };
-    } catch {
-      return { content: fallback };
-    }
-  }
-
   async getStructure(
     userId: number,
     presentationId: number,
@@ -615,17 +590,19 @@ export class PresentationsService {
     const structure: StructureItemDto[] = [];
 
     for (const p of parts) {
-      const name = await this.getPresentationPartContent(
-        p.presentationPartId,
-        PartTarget.Name,
-        p.name,
-      );
+      const name =
+        await this.presentationPartContentService.getPresentationPartContent(
+          p.presentationPartId,
+          PartTarget.Name,
+          p.name,
+        );
 
-      const text = await this.getPresentationPartContent(
-        p.presentationPartId,
-        PartTarget.Text,
-        p.text,
-      );
+      const text =
+        await this.presentationPartContentService.getPresentationPartContent(
+          p.presentationPartId,
+          PartTarget.Text,
+          p.text,
+        );
 
       const words = text.content
         .trim()
@@ -659,16 +636,18 @@ export class PresentationsService {
 
     const result: PartDto[] = [];
     for (const p of parts) {
-      const name = await this.getPresentationPartContent(
-        p.presentationPartId,
-        PartTarget.Name,
-        p.name,
-      );
-      const text = await this.getPresentationPartContent(
-        p.presentationPartId,
-        PartTarget.Text,
-        p.text,
-      );
+      const name =
+        await this.presentationPartContentService.getPresentationPartContent(
+          p.presentationPartId,
+          PartTarget.Name,
+          p.name,
+        );
+      const text =
+        await this.presentationPartContentService.getPresentationPartContent(
+          p.presentationPartId,
+          PartTarget.Text,
+          p.text,
+        );
 
       result.push(
         this.presentationsMapper.toPartDto(
@@ -1346,6 +1325,11 @@ export class PresentationsService {
     await this.findOneById(presentationId, userId);
     const activePresentation =
       await this.teleprompterGateway.getActivePresentation(presentationId);
+
+    if (!activePresentation?.currentPresentationStartDate) {
+      throw new NotFoundException('No active presentation session found');
+    }
+
     if (activePresentation?.currentOwnerUserId !== userId) {
       throw new ForbiddenException(
         'You are not the owner of the presentation or there are no users in the active presentation',
