@@ -60,8 +60,6 @@ export class UserService {
       .where('u.user_id = :id', { id: userId })
       .getOne();
 
-    console.log(user);
-
     return {
       data: this.userMapper.toUserDto(user!),
       error: false,

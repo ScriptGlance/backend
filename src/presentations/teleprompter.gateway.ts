@@ -543,7 +543,7 @@ export class TeleprompterGateway
 
     if (
       newPartIndex === structure.length - 1 &&
-      currentPart.partTextLength === newPosition - 1
+      currentPart.partTextLength === newPosition + 1
     ) {
       const part = await this.presentationPartRepository.findOne({
         where: { presentationPartId: currentPart.partId },
