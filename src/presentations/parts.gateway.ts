@@ -35,7 +35,7 @@ import { deepClone, transform } from '../common/utils/OperationalTranformation';
 
 type Socket = BaseSocket<any, any, any, SocketData>;
 
-@WebSocketGateway({ cors: true })
+@WebSocketGateway({ cors: true, namespace: 'parts' })
 export class PartsGateway
   extends BasePresentationGateway
   implements OnGatewayDisconnect, OnModuleInit, OnModuleDestroy

@@ -19,7 +19,7 @@ import { BasePresentationGateway } from '../common/base/basePresentation.gateway
 
 type Socket = BaseSocket<any, any, any, SocketData>;
 
-@WebSocketGateway({ cors: true })
+@WebSocketGateway({ cors: true, namespace: 'presentations' })
 @Injectable()
 export class PresentationsGateway
   extends BasePresentationGateway
