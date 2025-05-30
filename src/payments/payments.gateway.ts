@@ -16,7 +16,7 @@ import { PaymentEventDto } from './dto/PaymentEventDto';
 
 type Socket = BaseSocket<any, any, any, SocketData>;
 
-@WebSocketGateway({ cors: true })
+@WebSocketGateway({ cors: true, namespace: 'payments' })
 @Injectable()
 export class PaymentsGateway
   extends BaseGateway

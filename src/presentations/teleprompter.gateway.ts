@@ -42,12 +42,11 @@ import { TIME_TO_CONFIRM_PART_READING_SECONDS } from '../common/Constants';
 import { BasePresentationGateway } from '../common/base/basePresentation.gateway';
 import { PresentationPartContentService } from './presentation-part-content.service';
 import { PartTarget } from '../common/enum/PartTarget';
-import { retry } from 'rxjs';
 
 type TeleprompterSocketData = { user?: { id: number } };
 type TeleprompterSocket = Socket & { data: TeleprompterSocketData };
 
-@WebSocketGateway({ cors: true })
+@WebSocketGateway({ cors: true, namespace: 'teleprompter' })
 export class TeleprompterGateway
   extends BasePresentationGateway
   implements OnGatewayDisconnect, OnModuleInit
@@ -182,14 +181,15 @@ export class TeleprompterGateway
     if (
       currentOwnerUserId &&
       session &&
-      session.currentOwnerUserId != currentOwnerUserId
+      (session.currentOwnerUserId != currentOwnerUserId ||
+        this.joinedUsers.get(presentationId)?.size === 1)
     ) {
       const previousOwnerUserId = session.currentOwnerUserId;
       session.currentOwnerUserId = currentOwnerUserId;
       this.emitOwnerChangeEvent(presentationId, session.currentOwnerUserId);
       await this.setActiveSession(presentationId, session);
 
-      if (session.missingUserId) {
+      if (session.currentPresentationStartDate && session.missingUserId) {
         await this.emitPartReassignRequiredEvent(
           presentationId,
           session.missingUserId,
@@ -197,7 +197,10 @@ export class TeleprompterGateway
           PartReassignReason.MissingAssignee,
         );
 
-        if (this.isUserJoined(presentationId, previousOwnerUserId)) {
+        if (
+          previousOwnerUserId !== currentOwnerUserId &&
+          this.isUserJoined(presentationId, previousOwnerUserId)
+        ) {
           await this.emitPartReassignCancelledEvent(
             presentationId,
             previousOwnerUserId,
@@ -437,6 +440,15 @@ export class TeleprompterGateway
     socket.emit('part_reading_confirmation_cancelled');
   }
 
+  private emitPartReassignedEvent(
+    presentationId: number,
+    userId: number,
+    partId: number,
+  ) {
+    const room = this.getRoomName(presentationId);
+    this.server.to(room).emit('part_reassigned', { userId, partId });
+  }
+
   private async getSocketByUserId(presentationId: number, userId: number) {
     const room = this.getRoomName(presentationId);
 
@@ -458,10 +470,7 @@ export class TeleprompterGateway
     );
   }
 
-  private async initializeSessionInRedis(
-    presentationId: number,
-    isStarted: boolean,
-  ) {
+  private async getPartsStructure(presentationId: number) {
     const parts = await this.presentationPartRepository.find({
       where: { presentationId },
       relations: ['assignee.user'],
@@ -483,8 +492,15 @@ export class TeleprompterGateway
         };
       }),
     );
+    return structure;
+  }
 
+  private async initializeSessionInRedis(
+    presentationId: number,
+    isStarted: boolean,
+  ) {
     const lastSession = await this.getActiveSession(presentationId);
+    const structure = await this.getPartsStructure(presentationId);
 
     const initialSession: ActivePresentationDto = {
       currentReadingPosition: {
@@ -696,19 +712,36 @@ export class TeleprompterGateway
       return;
     }
     const session = await this.getActiveSession(presentationId);
-    if (!session) {
-      return;
-    }
+    if (!session) return;
 
     if (!this.joinedUsers.get(presentationId)) {
       await this.setActiveSession(presentationId, null);
+      return;
     }
+
+    const previousPartsMap = new Map(
+      session.structure.map((part) => [part.partId, part.assigneeUserId]),
+    );
 
     session.currentPresentationStartDate = undefined;
     session.currentReadingPosition = {
       partId: session.structure[0]?.partId ?? 0,
       position: 0,
     };
+
+    session.structure = await this.getPartsStructure(presentationId);
+
+    for (const part of session.structure) {
+      const prevAssignee = previousPartsMap.get(part.partId);
+      if (prevAssignee !== part.assigneeUserId) {
+        this.emitPartReassignedEvent(
+          presentationId,
+          part.assigneeUserId,
+          part.partId,
+        );
+      }
+    }
+
     await this.setActiveSession(presentationId, session);
   }
 
@@ -842,6 +875,9 @@ export class TeleprompterGateway
         );
     }
 
+    session.missingUserId = undefined;
+
     await this.setActiveSession(presentationId, session);
+    this.emitPartReassignedEvent(presentationId, readerId, currentPart.partId);
   }
 }
