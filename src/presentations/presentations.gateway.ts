@@ -1,7 +1,6 @@
 import {
   SubscribeMessage,
   WebSocketGateway,
-  OnGatewayDisconnect,
   OnGatewayInit,
   MessageBody,
   ConnectedSocket,
@@ -24,7 +23,7 @@ type Socket = BaseSocket<any, any, any, SocketData>;
 @Injectable()
 export class PresentationsGateway
   extends BasePresentationGateway
-  implements OnGatewayDisconnect, OnGatewayInit
+  implements OnGatewayInit
 {
   private server: Server;
 
@@ -39,10 +38,6 @@ export class PresentationsGateway
 
   afterInit(server: Server) {
     this.server = server;
-  }
-
-  handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
   }
 
   @SubscribeMessage('subscribe_presentation')
