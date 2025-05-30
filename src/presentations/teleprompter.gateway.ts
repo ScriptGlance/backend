@@ -58,6 +58,9 @@ export class TeleprompterGateway
   private readonly joinedUsers = new Map<number, Set<JoinedUserDto>>();
   private readonly redisKeyPrefix = 'teleprompter:session:';
   private readonly mutex = new Mutex();
+  private readonly stopTimers = new Map<number, NodeJS.Timeout>();
+  private readonly ownerChangeTimers = new Map<number, NodeJS.Timeout>();
+  private readonly DELAY_BEFORE_STOP_MS = 1000;
 
   constructor(
     jwtService: JwtService,
@@ -205,17 +208,41 @@ export class TeleprompterGateway
               'teleprompter_presence',
               new PresenceDto(userId, PresenceEventType.UserLeft),
             );
+
           if (users.size === 0) {
-            await this.stopPresentation(presentationId);
-            this.joinedUsers.delete(presentationId);
+            if (!this.stopTimers.has(presentationId)) {
+              const timer = setTimeout(() => {
+                if ((this.joinedUsers.get(presentationId)?.size ?? 0) === 0) {
+                  this.stopPresentation(presentationId).catch((err) =>
+                    console.error('Stop presentation error:', err),
+                  );
+                  this.joinedUsers.delete(presentationId);
+                }
+                this.stopTimers.delete(presentationId);
+              }, this.DELAY_BEFORE_STOP_MS);
+              this.stopTimers.set(presentationId, timer);
+            }
+          } else {
+            if (this.ownerChangeTimers.has(presentationId)) {
+              clearTimeout(this.ownerChangeTimers.get(presentationId));
+              this.ownerChangeTimers.delete(presentationId);
+            }
+            setTimeout(() => {
+              this.checkOwnerChange(presentationId).catch((err) => {
+                console.error('Owner change error:', err);
+              });
+              this.ownerChangeTimers.delete(presentationId);
+            }, this.DELAY_BEFORE_STOP_MS);
+            if (this.stopTimers.has(presentationId)) {
+              clearTimeout(this.stopTimers.get(presentationId));
+              this.stopTimers.delete(presentationId);
+            }
           }
+
           this.presentationsGateway.emitPresentationEvent(
             presentationId,
             PresentationEventType.JoinedUsersChanged,
           );
-
-          await this.checkOwnerChange(presentationId);
-
           const session = await this.getActiveSession(presentationId);
           if (!session || !session.currentPresentationStartDate) {
             return;
