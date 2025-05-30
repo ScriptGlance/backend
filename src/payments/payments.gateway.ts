@@ -34,7 +34,6 @@ export class PaymentsGateway
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
     const userId = client.data.user?.id;
     if (userId) {
       this.userSockets.delete(userId);

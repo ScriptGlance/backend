@@ -335,6 +335,7 @@ export class PartsGateway
           baseVersion: data.baseVersion,
         },
         userId,
+        client.id,
         newVersion,
       );
 
@@ -479,11 +480,13 @@ export class PartsGateway
       baseVersion: number;
     },
     userId: number,
+    socketId: string,
     appliedVersion: number,
   ): void {
     this.server.to(room).emit('text_operations', {
       ...data,
       userId,
+      socketId,
       appliedVersion,
     });
   }
