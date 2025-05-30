@@ -184,9 +184,26 @@ export class TeleprompterGateway
       session &&
       session.currentOwnerUserId != currentOwnerUserId
     ) {
+      const previousOwnerUserId = session.currentOwnerUserId;
       session.currentOwnerUserId = currentOwnerUserId;
       this.emitOwnerChangeEvent(presentationId, session.currentOwnerUserId);
       await this.setActiveSession(presentationId, session);
+
+      if (session.missingUserId) {
+        await this.emitPartReassignRequiredEvent(
+          presentationId,
+          session.missingUserId,
+          session.currentReadingPosition.partId,
+          PartReassignReason.MissingAssignee,
+        );
+
+        if (this.isUserJoined(presentationId, previousOwnerUserId)) {
+          await this.emitPartReassignCancelledEvent(
+            presentationId,
+            previousOwnerUserId,
+          );
+        }
+      }
     }
   }
 
@@ -322,12 +339,17 @@ export class TeleprompterGateway
     ownerSocket.emit('part_reassign_required', { userId, partId, reason });
   }
 
-  private async emitPartReassignCancelledEvent(presentationId: number) {
-    const ownerSocket = await this.getOwnerSocket(presentationId);
-    if (!ownerSocket) {
+  private async emitPartReassignCancelledEvent(
+    presentationId: number,
+    userId?: number,
+  ) {
+    const socket = userId
+      ? await this.getSocketByUserId(presentationId, userId)
+      : await this.getOwnerSocket(presentationId);
+    if (!socket) {
       return;
     }
-    ownerSocket.emit('part_reassign_cancelled');
+    socket.emit('part_reassign_cancelled');
   }
 
   private emitWaitingForUserEvent(presentationId: number, userId: number) {
