@@ -792,6 +792,20 @@ export class PresentationsService {
       ),
     );
 
+    if (data.part_assignee_participant_id !== undefined) {
+      const participant = await this.participantRepository.findOne({
+        where: { participantId: data.part_assignee_participant_id },
+        select: ['userId'],
+      });
+      if (participant) {
+        await this.teleprompterGateway.updatePartAssignee(
+          part.presentationId,
+          partId,
+          participant.userId,
+        );
+      }
+    }
+
     return {
       data: this.presentationsMapper.toPartDto(part),
       error: false,
@@ -888,6 +902,8 @@ export class PresentationsService {
     } catch { /* empty */ }
 
     const midSeconds = Math.max(1, Math.floor(durationMs / 1000 / 2));
+
+    const midSeconds = Math.floor(durationMs / 1000 / 2);
 
     return new Promise((resolve, reject) => {
       ffmpeg(videoPath)

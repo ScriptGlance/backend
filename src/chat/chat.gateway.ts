@@ -83,6 +83,7 @@ export class ChatGateway extends BaseGateway {
       chat_id: chat.chatId,
       user_full_name:
         newMessage.chat.user.firstName + ' ' + newMessage.chat.user.lastName,
+      avatar: newMessage.chat.user.avatar,
       chat_message_id: newMessage.chatMessageId,
       is_written_by_moderator: false,
       text: newMessage.text,
