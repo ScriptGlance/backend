@@ -20,6 +20,7 @@ import {
   FREE_VIDEOS_PER_PRESENTATION,
   MAX_FREE_PARTICIPANTS_COUNT,
   MAX_FREE_RECORDING_TIME_SECONDS,
+  VIDEO_DURATION_MAX_TAIL_SECONDS,
 } from '../common/Constants';
 
 import { UpdatePresentationDto } from './dto/UpdatePresentationDto';
@@ -870,7 +871,10 @@ export class PresentationsService {
     });
   }
 
-  private async generateThumbnail(videoPath: string): Promise<string> {
+  private async generateThumbnail(
+    videoPath: string,
+    durationMs: number,
+  ): Promise<string> {
     const previewsDir = './uploads/previews';
     await fsPromises.mkdir(previewsDir, { recursive: true });
 
@@ -881,15 +885,15 @@ export class PresentationsService {
     try {
       await fsPromises.access(outputPath);
       return outputPath;
-    } catch {
-      /* empty */
-    }
+    } catch { /* empty */ }
+
+    const midSeconds = Math.max(1, Math.floor(durationMs / 1000 / 2));
 
     return new Promise((resolve, reject) => {
       ffmpeg(videoPath)
         .screenshots({
           count: 1,
-          timemarks: ['0'],
+          timemarks: [midSeconds.toString()],
           folder: previewsDir,
           filename: fileName,
           size: '320x?',
@@ -950,6 +954,7 @@ export class PresentationsService {
         .innerJoin('v.presentationStart', 'ps')
         .innerJoin('ps.presentation', 'p')
         .where('p.presentation_id = :pid', { pid: presentationId })
+        .andWhere('v.userUserId = :uid', { uid: userId })
         .getCount();
 
       if (existingVideosCount >= FREE_VIDEOS_PER_PRESENTATION) {
@@ -962,14 +967,16 @@ export class PresentationsService {
     const durationMs = await this.probeDurationMs(file.path);
     if (
       !userHasSubscription &&
-      durationMs > MAX_FREE_RECORDING_TIME_SECONDS * 1000
+      durationMs >
+        (MAX_FREE_RECORDING_TIME_SECONDS + VIDEO_DURATION_MAX_TAIL_SECONDS) *
+          1000
     ) {
       throw new BadRequestException(
         `Free videos must be at most ${MAX_FREE_RECORDING_TIME_SECONDS} seconds long`,
       );
     }
 
-    const thumbnailPath = await this.generateThumbnail(file.path);
+    const thumbnailPath = await this.generateThumbnail(file.path, durationMs);
     const shareCode = this.generatePresentationShareCode();
     const videoEntity = this.videoRepository.create({
       presentationStart,
