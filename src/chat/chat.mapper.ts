@@ -27,7 +27,9 @@ export class ChatMapper {
     return {
       chat_id: chat.chatId,
       user_full_name: `${chat.user.firstName} ${chat.user.lastName}`,
-      avatar: chat.user.avatar ?? null,
+      avatar: chat.user.avatar
+        ? '/' + chat.user.avatar.replace('uploads/', '')
+        : null,
       last_message: lastMessage?.text ?? '',
       last_message_sent_date: lastMessage?.sentDate ?? new Date(0),
       unread_messages_count: unreadCount,
