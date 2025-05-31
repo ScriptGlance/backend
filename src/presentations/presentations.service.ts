@@ -901,8 +901,6 @@ export class PresentationsService {
       return outputPath;
     } catch { /* empty */ }
 
-    const midSeconds = Math.max(1, Math.floor(durationMs / 1000 / 2));
-
     const midSeconds = Math.floor(durationMs / 1000 / 2);
 
     return new Promise((resolve, reject) => {
