@@ -897,4 +897,26 @@ export class TeleprompterGateway
     await this.setActiveSession(presentationId, session);
     this.emitPartReassignedEvent(presentationId, readerId, currentPart.partId);
   }
+
+  async updatePartAssignee(
+    presentationId: number,
+    partId: number,
+    assigneeUserId: number,
+  ) {
+    const session = await this.getActiveSession(presentationId);
+    if (!session) return;
+
+    const prev = session.structure.find((p) => p.partId === partId);
+    if (prev && prev.assigneeUserId !== assigneeUserId) {
+      this.emitPartReassignedEvent(presentationId, assigneeUserId, partId);
+    }
+
+    session.structure = session.structure.map((part) => {
+      if (part.partId === partId) {
+        return { ...part, assigneeUserId };
+      }
+      return part;
+    });
+    await this.setActiveSession(presentationId, session);
+  }
 }

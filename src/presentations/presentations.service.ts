@@ -792,6 +792,20 @@ export class PresentationsService {
       ),
     );
 
+    if (data.part_assignee_participant_id !== undefined) {
+      const participant = await this.participantRepository.findOne({
+        where: { participantId: data.part_assignee_participant_id },
+        select: ['userId'],
+      });
+      if (participant) {
+        await this.teleprompterGateway.updatePartAssignee(
+          part.presentationId,
+          partId,
+          participant.userId,
+        );
+      }
+    }
+
     return {
       data: this.presentationsMapper.toPartDto(part),
       error: false,
@@ -885,7 +899,9 @@ export class PresentationsService {
     try {
       await fsPromises.access(outputPath);
       return outputPath;
-    } catch { /* empty */ }
+    } catch {
+      /* empty */
+    }
 
     const midSeconds = Math.floor(durationMs / 1000 / 2);
 
