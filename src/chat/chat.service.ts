@@ -82,10 +82,14 @@ export class ChatService {
     });
     const saved = await this.chatMessageRepository.save(message);
 
-    await this.chatGateway.emitUserMessage(saved);
+    const lastMessage = (await this.chatMessageRepository.findOne({
+      where: { chatMessageId: saved.chatMessageId },
+      relations: ['chat', 'chat.user'],
+    }))!;
+    await this.chatGateway.emitUserMessage(lastMessage);
 
     return {
-      data: this.chatMapper.toChatMessageDto(saved),
+      data: this.chatMapper.toChatMessageDto(lastMessage),
       error: false,
     };
   }
