@@ -324,7 +324,7 @@ export class ChatService {
       throw new ForbiddenException('You can access only latest user chat');
     }
 
-    if (chat.assignedModerator !== null) {
+    if (chat.assignedModerator) {
       await this.markMessagesAsRead(chatId, false);
     }
 
