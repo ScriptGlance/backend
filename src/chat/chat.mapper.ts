@@ -26,7 +26,8 @@ export class ChatMapper {
   ): ChatDto {
     return {
       chat_id: chat.chatId,
-      user_full_name: `${chat.user.firstName} ${chat.user.lastName}`,
+      user_first_name: chat.user.firstName,
+      user_last_name: chat.user.lastName,
       avatar: chat.user.avatar
         ? '/' + chat.user.avatar.replace('uploads/', '')
         : null,
