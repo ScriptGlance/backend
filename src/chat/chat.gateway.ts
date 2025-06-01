@@ -87,6 +87,7 @@ export class ChatGateway extends BaseGateway {
       avatar: newMessage.chat.user.avatar
         ? '/' + newMessage.chat.user.avatar.replace('uploads/', '')
         : undefined,
+      user_id: newMessage.chat.user.userId,
       chat_message_id: newMessage.chatMessageId,
       is_written_by_moderator: false,
       text: newMessage.text,
