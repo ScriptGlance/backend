@@ -29,6 +29,11 @@ import { ModeratorEntity } from '../common/entities/ModeratorEntity';
 import { AdminEntity } from '../common/entities/AdminEntity';
 import { PasswordResetTokenEntity } from '../common/entities/PasswordResetTokenEntity';
 import { EmailVerificationCodeEntity } from '../common/entities/EmailVerificationCodeEntity';
+import { MobileSocialLoginDto } from './dto/MobileSocialLoginDto';
+import { OAuth2Client } from 'google-auth-library';
+import axios from 'axios';
+import { FacebookDebugTokenResponseDto } from './dto/FacebookDebugTokenResponseDto';
+import { FacebookProfileResponse } from './dto/FacebookProfileResponseDto';
 
 @Injectable()
 export class AuthService {
@@ -421,7 +426,7 @@ export class AuthService {
         });
         break;
       case Role.Moderator:
-         console.log('Fetching moderator by email:', email);
+        console.log('Fetching moderator by email:', email);
         account = await this.moderatorRepository.findOne({
           where: { email },
         });
@@ -470,5 +475,63 @@ export class AuthService {
       password: hashedPassword,
     });
     return this.userRepository.save(user);
+  }
+
+  async mobileSocialLogin(
+    dto: MobileSocialLoginDto,
+  ): Promise<StandardResponse<TokenResponseDto>> {
+    let email: string | undefined;
+    let firstName: string;
+    let lastName: string;
+
+    if (dto.provider === 'google') {
+      const client = new OAuth2Client(
+        this.configService.get('GOOGLE_CLIENT_ID'),
+      );
+      const ticket = await client.verifyIdToken({
+        idToken: dto.token,
+        audience: this.configService.get('GOOGLE_CLIENT_ID'),
+      });
+      const payload = ticket.getPayload();
+      if (!payload?.email) {
+        throw new BadRequestException('Google token invalid');
+      }
+      email = payload.email;
+      firstName = payload.given_name || '';
+      lastName = payload.family_name || '';
+    } else if (dto.provider === 'facebook') {
+      const appId = this.configService.get<string>('FACEBOOK_APP_ID');
+      const appSecret = this.configService.get<string>('FACEBOOK_APP_SECRET');
+      const debugUrl = `https://graph.facebook.com/debug_token?input_token=${dto.token}&access_token=${appId}|${appSecret}`;
+      const debugRes = await axios.get<FacebookDebugTokenResponseDto>(debugUrl);
+      if (!debugRes.data.data?.is_valid) {
+        throw new BadRequestException('Facebook token invalid');
+      }
+      const profileUrl = `https://graph.facebook.com/me?fields=email,first_name,last_name&access_token=${dto.token}`;
+      const profileRes = await axios.get<FacebookProfileResponse>(profileUrl);
+      email = profileRes.data.email;
+      firstName = profileRes.data.first_name || '';
+      lastName = profileRes.data.last_name || '';
+      if (!email) {
+        throw new BadRequestException('Facebook account has no email');
+      }
+    } else {
+      throw new BadRequestException('Unknown provider');
+    }
+
+    let account = await this.getAccountByEmail(dto.role, email);
+    if (!account) {
+      if (dto.role !== Role.User) {
+        throw new BadRequestException(
+          'Only users can register via social login',
+        );
+      }
+      account = await this.createUser(firstName, lastName, email, '');
+    }
+
+    return {
+      data: new TokenResponseDto(this.generateAuthToken(account)),
+      error: false,
+    };
   }
 }

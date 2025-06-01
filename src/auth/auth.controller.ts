@@ -26,6 +26,7 @@ import { UserEntity } from '../common/entities/UserEntity';
 import { ModeratorEntity } from '../common/entities/ModeratorEntity';
 import { AdminEntity } from '../common/entities/AdminEntity';
 import { Response } from 'express';
+import { MobileSocialLoginDto } from './dto/MobileSocialLoginDto';
 
 @Controller('auth')
 export class AuthController {
@@ -66,6 +67,12 @@ export class AuthController {
     res.redirect(
       `${this.configService.get<string>('SUCCESS_LOGIN_REDIRECT_URL')}?token=${token}`,
     );
+  }
+
+  @Post('mobile-social-login')
+  @ApiBody({ type: MobileSocialLoginDto })
+  async mobileSocialLogin(@Body() dto: MobileSocialLoginDto) {
+    return this.authService.mobileSocialLogin(dto);
   }
 
   @Post('register')
