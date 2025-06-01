@@ -82,8 +82,8 @@ export class ChatGateway extends BaseGateway {
       is_assigned: chat.assignedModerator !== null,
       is_new_chat: messagesCount == 1,
       chat_id: chat.chatId,
-      user_full_name:
-        newMessage.chat.user.firstName + ' ' + newMessage.chat.user.lastName,
+      user_first_name: newMessage.chat.user.firstName,
+      user_last_name: newMessage.chat.user.lastName,
       avatar: newMessage.chat.user.avatar
         ? '/' + newMessage.chat.user.avatar.replace('uploads/', '')
         : undefined,
