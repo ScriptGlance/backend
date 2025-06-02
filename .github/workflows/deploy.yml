@@ -42,6 +42,7 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
-            cd /app
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/script-glance-backend:latest
-            docker-compose -f docker-compose.yml up -d --remove-orphans
+            cd /backend
+            docker-compose down
+            docker-compose pull
+            docker-compose up -d --remove-orphans
