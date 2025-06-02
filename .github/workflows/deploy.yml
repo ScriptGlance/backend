@@ -42,7 +42,7 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
-            cd /backend
+            cd backend
             docker-compose down
             docker-compose pull
             docker-compose up -d --remove-orphans
