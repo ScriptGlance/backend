@@ -26,7 +26,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          dockerfile: prod.Dockerfile
+          file: ./prod.Dockerfile
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/script-glance-backend:latest
 
