@@ -8,9 +8,9 @@ import { InvitationDto } from './dto/InvitationDto';
 import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
 import { StructureItemDto } from './dto/StructureItemDto';
 import { PartDto } from './dto/PartDto';
-import {VideoEntity} from "../common/entities/VideoEntity";
-import {VideoDto} from "./dto/VideoDto";
-import {UserMapper} from "../user/user.mapper";
+import { VideoEntity } from '../common/entities/VideoEntity';
+import { VideoDto } from './dto/VideoDto';
+import { UserMapper } from '../user/user.mapper';
 
 @Injectable()
 export class PresentationMapper {
@@ -31,6 +31,7 @@ export class PresentationMapper {
       created_at: presentation.createdAt,
       modified_at: presentation.modifiedAt,
       owner: this.userMapper.toUserDto(presentation.owner.user),
+      participant_count: presentation.participants.length,
     };
   }
 
@@ -52,18 +53,24 @@ export class PresentationMapper {
       part_name: part.name,
       part_order: part.order,
       words_count: wordsCount,
-      text_preview: part.text.slice(0, 100),
+      text_preview: part.text.slice(0, 300),
       assignee: this.userMapper.toUserDto(part.assignee.user),
     };
   }
 
-  toPartDto(part: PresentationPartEntity): PartDto {
+  toPartDto(
+    part: PresentationPartEntity,
+    textVersion?: number,
+    nameVersion?: number,
+  ): PartDto {
     return {
       part_id: part.presentationPartId,
       part_name: part.name,
       part_text: part.text,
       part_order: part.order,
-      assignee_participant_id: part.assigneeParticipantId,
+      assignee_participant_id: part.assigneeParticipantId ?? undefined,
+      part_text_version: textVersion,
+      part_name_version: nameVersion,
     };
   }
 
@@ -77,7 +84,7 @@ export class PresentationMapper {
       presentation_start: {
         start_date: video.presentationStart.startDate,
         end_date: video.presentationStart.endDate,
-      }
-    }
+      },
+    };
   }
 }

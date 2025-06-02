@@ -1,7 +1,6 @@
 import {
   SubscribeMessage,
   WebSocketGateway,
-  OnGatewayDisconnect,
   OnGatewayInit,
   MessageBody,
   ConnectedSocket,
@@ -16,15 +15,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { PresentationEventDto } from './dto/PresentationEventDto';
 import { PresentationEventType } from '../common/enum/PresentationEventType';
 import { SocketData } from '../common/interface/SocketData';
-import {BasePresentationGateway} from "../common/base/basePresentation.gateway";
+import { BasePresentationGateway } from '../common/base/basePresentation.gateway';
 
 type Socket = BaseSocket<any, any, any, SocketData>;
 
-@WebSocketGateway({ cors: true })
+@WebSocketGateway({ cors: true, namespace: 'presentations' })
 @Injectable()
 export class PresentationsGateway
   extends BasePresentationGateway
-  implements OnGatewayDisconnect, OnGatewayInit
+  implements OnGatewayInit
 {
   private server: Server;
 
@@ -41,10 +40,6 @@ export class PresentationsGateway
     this.server = server;
   }
 
-  handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
-  }
-
   @SubscribeMessage('subscribe_presentation')
   async handleSubscribePresentation(
     @MessageBody() data: { presentationId: number },
@@ -56,7 +51,10 @@ export class PresentationsGateway
       return;
     }
 
-    const presentation = this.getPresentationWithAccessControl(data.presentationId, userId)
+    const presentation = await this.getPresentationWithAccessControl(
+      data.presentationId,
+      userId,
+    );
 
     if (!presentation) {
       client.emit('error', 'Access denied to presentation');
@@ -68,11 +66,11 @@ export class PresentationsGateway
     client.emit('subscribed', { room });
   }
 
-
   emitPresentationEvent(presentationId: number, event: PresentationEventType) {
     const room = `presentation/${presentationId}/events`;
-    this.server
-      .to(room)
-      .emit('presentationEvent', new PresentationEventDto(event));
+    const dto: PresentationEventDto = {
+      event_type: event,
+    };
+    this.server.to(room).emit('presentationEvent', dto);
   }
 }

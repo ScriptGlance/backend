@@ -7,7 +7,6 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { BaseGateway } from '../common/base/base.gateway';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { JwtService } from '@nestjs/jwt';
@@ -37,16 +36,17 @@ import { RecordingModeChangeDto } from './dto/RecordingModeChangeDto';
 import { UserRecordedVideosDto } from './dto/UserRecordedVideosDto';
 import { RecordedVideosCountChangeEventDto } from './dto/RecordedVideosCountChangeEventDto';
 import { PartReassignReason } from '../common/enum/PartReassignReason';
-import { PartReassignRequiredEventDto } from './dto/PartReassignRequiredEventDto';
 import { WaitingForUserEventDto } from './dto/WaitingForUserEventDto';
 import { PartReadingConfirmationRequiredEventDto } from './dto/PartReadingConfirmationRequiredEventDto';
 import { TIME_TO_CONFIRM_PART_READING_SECONDS } from '../common/Constants';
-import {BasePresentationGateway} from "../common/base/basePresentation.gateway";
+import { BasePresentationGateway } from '../common/base/basePresentation.gateway';
+import { PresentationPartContentService } from './presentation-part-content.service';
+import { PartTarget } from '../common/enum/PartTarget';
 
 type TeleprompterSocketData = { user?: { id: number } };
 type TeleprompterSocket = Socket & { data: TeleprompterSocketData };
 
-@WebSocketGateway({ cors: true })
+@WebSocketGateway({ cors: true, namespace: 'teleprompter' })
 export class TeleprompterGateway
   extends BasePresentationGateway
   implements OnGatewayDisconnect, OnModuleInit
@@ -57,6 +57,11 @@ export class TeleprompterGateway
   private readonly joinedUsers = new Map<number, Set<JoinedUserDto>>();
   private readonly redisKeyPrefix = 'teleprompter:session:';
   private readonly mutex = new Mutex();
+  private readonly stopTimers = new Map<number, NodeJS.Timeout>();
+  private readonly ownerChangeTimers = new Map<number, NodeJS.Timeout>();
+  private readonly DELAY_BEFORE_STOP_MS = 1000;
+  private readonly confirmationTimers = new Map<number, NodeJS.Timeout>();
+  private readonly DELAY_BETWEEN_PARTS_MS = 1000;
 
   constructor(
     jwtService: JwtService,
@@ -70,6 +75,7 @@ export class TeleprompterGateway
     @InjectRepository(PresentationStartEntity)
     private readonly presentationStartRepository: Repository<PresentationStartEntity>,
     private readonly presentationsGateway: PresentationsGateway,
+    private readonly presentationPartContentService: PresentationPartContentService,
   ) {
     super(jwtService, configService, presentationRepository);
   }
@@ -91,84 +97,118 @@ export class TeleprompterGateway
     @MessageBody() data: { presentationId: number },
     @ConnectedSocket() client: TeleprompterSocket,
   ) {
-    const userId = client.data.user?.id;
-    if (!userId) {
-      client.emit('error', 'User not authenticated');
-      return;
-    }
-    const presentation = await this.getPresentationWithAccessControl(
-      data.presentationId,
-      userId,
-    );
-    if (!presentation) {
-      client.emit('error', 'Access denied to presentation');
-    }
-
-    const room = this.getRoomName(data.presentationId);
-    await client.join(room);
-    if (!this.joinedUsers.has(data.presentationId)) {
-      const users = new Set<JoinedUserDto>();
-      users.add(new JoinedUserDto(userId));
-      this.joinedUsers.set(data.presentationId, users);
-      const session = await this.initializeSessionInRedis(
-        data.presentationId,
-        false,
-      );
-      this.emitOwnerChangeEvent(
-        data.presentationId,
-        session.currentOwnerUserId,
-      );
-    } else {
-      this.joinedUsers.get(data.presentationId)!.add(new JoinedUserDto(userId));
-
-      const session = await this.getActiveSession(data.presentationId);
-      if (!session) {
+    try {
+      const userId = client.data.user?.id;
+      if (!userId) {
+        client.emit('error', 'User not authenticated');
         return;
       }
-      if (
-        session.currentPresentationStartDate &&
-        this.getActiveReaderId(session) === userId
-      ) {
-        await this.emitPartReassignCancelledEvent(data.presentationId);
-        if (session.awaitingConfirmationUserId) {
-          await this.emitPartReadingConfirmationCancelledEvent(
-            data.presentationId,
-            session.awaitingConfirmationUserId,
-          );
-        }
-        await this.emitPartReadingConfirmationRequiredEvent(
-          data.presentationId,
-          userId,
-        );
-
-        session.missingUserId = undefined;
-        await this.setActiveSession(data.presentationId, session);
+      const presentation = await this.getPresentationWithAccessControl(
+        data.presentationId,
+        userId,
+      );
+      if (!presentation) {
+        client.emit('error', 'Access denied to presentation');
       }
 
-      await this.checkOwnerChange(data.presentationId);
-    }
-    client.broadcast
-      .to(room)
-      .emit(
-        'teleprompter_presence',
-        new PresenceDto(userId, PresenceEventType.UserJoined),
+      const room = this.getRoomName(data.presentationId);
+      await client.join(room);
+      if (!this.joinedUsers.has(data.presentationId)) {
+        const users = new Set<JoinedUserDto>();
+        users.add(new JoinedUserDto(userId));
+        this.joinedUsers.set(data.presentationId, users);
+        const session = await this.initializeSessionInRedis(
+          data.presentationId,
+          false,
+        );
+        this.emitOwnerChangeEvent(
+          data.presentationId,
+          session.currentOwnerUserId,
+        );
+      } else {
+        const users = this.joinedUsers.get(data.presentationId)!;
+        if (![...users].some((user) => user.userId === userId)) {
+          this.joinedUsers
+            .get(data.presentationId)!
+            .add(new JoinedUserDto(userId));
+        }
+
+        const session = await this.getActiveSession(data.presentationId);
+        if (!session) {
+          return;
+        }
+        if (
+          session.currentPresentationStartDate &&
+          this.getActiveReaderId(session) === userId
+        ) {
+          await this.emitPartReassignCancelledEvent(data.presentationId);
+          if (session.awaitingConfirmationUserId) {
+            await this.emitPartReadingConfirmationCancelledEvent(
+              data.presentationId,
+              session.awaitingConfirmationUserId,
+            );
+            session.awaitingConfirmationUserId = undefined;
+            await this.setActiveSession(data.presentationId, session);
+          }
+          await this.emitPartReadingConfirmationRequiredEvent(
+            data.presentationId,
+            userId,
+          );
+
+          session.missingUserId = undefined;
+          await this.setActiveSession(data.presentationId, session);
+        }
+
+        await this.checkOwnerChange(data.presentationId, 300);
+      }
+      client.broadcast
+        .to(room)
+        .emit(
+          'teleprompter_presence',
+          new PresenceDto(userId, PresenceEventType.UserJoined),
+        );
+      this.presentationsGateway.emitPresentationEvent(
+        data.presentationId,
+        PresentationEventType.JoinedUsersChanged,
       );
-    this.presentationsGateway.emitPresentationEvent(
-      data.presentationId,
-      PresentationEventType.JoinedUsersChanged,
-    );
+    } catch (error) {
+      console.error('Teleprompter subscribe error:', error);
+      client.emit('error', 'Failed to subscribe to teleprompter');
+    }
   }
 
-  private async checkOwnerChange(presentationId: number) {
-    const session = (await this.getActiveSession(presentationId))!;
+  private async checkOwnerChange(
+    presentationId: number,
+    reassignRequiredSendTimeoutMs: number = 0,
+  ) {
+    const session = await this.getActiveSession(presentationId);
     const currentOwnerUserId = await this.getCurrentOwnerUserId(presentationId);
-    if (
-      currentOwnerUserId &&
-      session.currentOwnerUserId != currentOwnerUserId
-    ) {
+    if (currentOwnerUserId && session) {
+      const previousOwnerUserId = session.currentOwnerUserId;
       session.currentOwnerUserId = currentOwnerUserId;
       this.emitOwnerChangeEvent(presentationId, session.currentOwnerUserId);
       await this.setActiveSession(presentationId, session);
+
+      if (session.currentPresentationStartDate && session.missingUserId) {
+        setTimeout(async () => {
+          await this.emitPartReassignRequiredEvent(
+            presentationId,
+            session.missingUserId!,
+            session.currentReadingPosition.partId,
+            PartReassignReason.MissingAssignee,
+          );
+        }, reassignRequiredSendTimeoutMs);
+
+        if (
+          previousOwnerUserId !== currentOwnerUserId &&
+          this.isUserJoined(presentationId, previousOwnerUserId)
+        ) {
+          await this.emitPartReassignCancelledEvent(
+            presentationId,
+            previousOwnerUserId,
+          );
+        }
+      }
     }
   }
 
@@ -190,18 +230,59 @@ export class TeleprompterGateway
               'teleprompter_presence',
               new PresenceDto(userId, PresenceEventType.UserLeft),
             );
-          if (users.size === 0) {
-            await this.stopPresentation(presentationId);
-            this.joinedUsers.delete(presentationId);
+
+          const session = await this.getActiveSession(presentationId);
+          if (
+            session &&
+            session.awaitingConfirmationUserId === userId &&
+            this.confirmationTimers.has(presentationId)
+          ) {
+            clearTimeout(this.confirmationTimers.get(presentationId));
+            this.confirmationTimers.delete(presentationId);
+
+            await this.emitPartReadingConfirmationCancelledEvent(
+              presentationId,
+              userId,
+            );
+
+            session.awaitingConfirmationUserId = undefined;
+            session.confirmationRequestSentTime = undefined;
           }
+
+          if (users.size === 0) {
+            if (!this.stopTimers.has(presentationId)) {
+              const timer = setTimeout(() => {
+                if ((this.joinedUsers.get(presentationId)?.size ?? 0) === 0) {
+                  this.stopPresentation(presentationId).catch((err) =>
+                    console.error('Stop presentation error:', err),
+                  );
+                  this.joinedUsers.delete(presentationId);
+                }
+                this.stopTimers.delete(presentationId);
+              }, this.DELAY_BEFORE_STOP_MS);
+              this.stopTimers.set(presentationId, timer);
+            }
+          } else {
+            if (this.ownerChangeTimers.has(presentationId)) {
+              clearTimeout(this.ownerChangeTimers.get(presentationId));
+              this.ownerChangeTimers.delete(presentationId);
+            }
+            setTimeout(() => {
+              this.checkOwnerChange(presentationId).catch((err) => {
+                console.error('Owner change error:', err);
+              });
+              this.ownerChangeTimers.delete(presentationId);
+            }, this.DELAY_BEFORE_STOP_MS);
+            if (this.stopTimers.has(presentationId)) {
+              clearTimeout(this.stopTimers.get(presentationId));
+              this.stopTimers.delete(presentationId);
+            }
+          }
+
           this.presentationsGateway.emitPresentationEvent(
             presentationId,
             PresentationEventType.JoinedUsersChanged,
           );
-
-          await this.checkOwnerChange(presentationId);
-
-          const session = await this.getActiveSession(presentationId);
           if (!session || !session.currentPresentationStartDate) {
             return;
           }
@@ -252,23 +333,23 @@ export class TeleprompterGateway
       );
   }
 
-  private async emitRecordedVideosCountChange(
+  private emitRecordedVideosCountChange(
     presentationId: number,
     userId: number,
     recordedVideosCount: number,
   ) {
-    const ownerSocket = await this.getOwnerSocket(presentationId);
-    if (!ownerSocket) {
-      return;
-    }
-    ownerSocket.emit(
-      'recorded_videos_count_change',
-      new RecordedVideosCountChangeEventDto(userId, recordedVideosCount),
-    );
+    const room = this.getRoomName(presentationId);
+    this.server
+      .to(room)
+      .emit(
+        'recorded_videos_count_change',
+        new RecordedVideosCountChangeEventDto(userId, recordedVideosCount),
+      );
   }
 
   private async emitPartReassignRequiredEvent(
     presentationId: number,
+    userId: number,
     partId: number,
     reason: PartReassignReason,
   ) {
@@ -276,18 +357,20 @@ export class TeleprompterGateway
     if (!ownerSocket) {
       return;
     }
-    ownerSocket.emit(
-      'part_reassign_required',
-      new PartReassignRequiredEventDto(partId, reason),
-    );
+    ownerSocket.emit('part_reassign_required', { userId, partId, reason });
   }
 
-  private async emitPartReassignCancelledEvent(presentationId: number) {
-    const ownerSocket = await this.getOwnerSocket(presentationId);
-    if (!ownerSocket) {
+  private async emitPartReassignCancelledEvent(
+    presentationId: number,
+    userId?: number,
+  ) {
+    const socket = userId
+      ? await this.getSocketByUserId(presentationId, userId)
+      : await this.getOwnerSocket(presentationId);
+    if (!socket) {
       return;
     }
-    ownerSocket.emit('part_reassign_cancelled');
+    socket.emit('part_reassign_cancelled');
   }
 
   private emitWaitingForUserEvent(presentationId: number, userId: number) {
@@ -318,7 +401,10 @@ export class TeleprompterGateway
     if (!activeReaderId) {
       return;
     }
-    if (this.isUserJoined(presentationId, activeReaderId)) {
+    if (
+      userId != activeReaderId &&
+      this.isUserJoined(presentationId, activeReaderId)
+    ) {
       throw new ConflictException('Active reader is in the presentation');
     }
 
@@ -346,17 +432,23 @@ export class TeleprompterGateway
       new PartReadingConfirmationRequiredEventDto(
         activePartId,
         TIME_TO_CONFIRM_PART_READING_SECONDS,
-        session.currentReadingPosition.position > 0,
+        userId !== activeReaderId &&
+          session.currentReadingPosition.position > 0,
       ),
     );
 
-    setTimeout(async () => {
+    if (this.confirmationTimers.has(presentationId)) {
+      clearTimeout(this.confirmationTimers.get(presentationId));
+    }
+    const timer = setTimeout(async () => {
       const session = await this.getActiveSession(presentationId);
       if (!session || !session.currentPresentationStartDate) {
         return;
       }
-      await this.checkCurrentReaderAvailability(presentationId, session);
+      await this.checkCurrentReaderAvailability(presentationId, session, true);
     }, TIME_TO_CONFIRM_PART_READING_SECONDS * 1000);
+
+    this.confirmationTimers.set(presentationId, timer);
   }
 
   private async emitPartReadingConfirmationCancelledEvent(
@@ -369,6 +461,15 @@ export class TeleprompterGateway
     }
 
     socket.emit('part_reading_confirmation_cancelled');
+  }
+
+  private emitPartReassignedEvent(
+    presentationId: number,
+    userId: number,
+    partId: number,
+  ) {
+    const room = this.getRoomName(presentationId);
+    this.server.to(room).emit('part_reassigned', { userId, partId });
   }
 
   private async getSocketByUserId(presentationId: number, userId: number) {
@@ -392,22 +493,37 @@ export class TeleprompterGateway
     );
   }
 
-  private async initializeSessionInRedis(
-    presentationId: number,
-    isStarted: boolean,
-  ) {
+  private async getPartsStructure(presentationId: number) {
     const parts = await this.presentationPartRepository.find({
       where: { presentationId },
       relations: ['assignee.user'],
       order: { order: 'ASC' },
     });
-    const structure: PartStructureDto[] = parts.map((item) => ({
-      partId: item.presentationPartId,
-      partTextLength: item.text.length,
-      assigneeUserId: item.assignee.user.userId,
-    }));
 
+    const structure: PartStructureDto[] = await Promise.all(
+      parts.map(async (part) => {
+        const text =
+          await this.presentationPartContentService.getPresentationPartContent(
+            part.presentationPartId,
+            PartTarget.Text,
+            part.text,
+          );
+        return {
+          partId: part.presentationPartId,
+          partTextLength: text.content.length,
+          assigneeUserId: part.assignee.user.userId,
+        };
+      }),
+    );
+    return structure;
+  }
+
+  private async initializeSessionInRedis(
+    presentationId: number,
+    isStarted: boolean,
+  ) {
     const lastSession = await this.getActiveSession(presentationId);
+    const structure = await this.getPartsStructure(presentationId);
 
     const initialSession: ActivePresentationDto = {
       currentReadingPosition: {
@@ -464,6 +580,14 @@ export class TeleprompterGateway
       return this.emitError(client, 'Presentation is not started');
     }
 
+    if (
+      !Array.from(this.joinedUsers.get(presentationId) ?? []).find(
+        (user) => user.userId === userId,
+      )
+    ) {
+      return this.emitError(client, 'You are not joined');
+    }
+
     const { structure, currentReadingPosition } = session;
     const currentPartIndex = structure.findIndex(
       (p) => p.partId === currentReadingPosition.partId,
@@ -478,17 +602,19 @@ export class TeleprompterGateway
     if (userId !== currentPart.assigneeUserId) {
       return this.emitError(client, 'You cannot read this part');
     }
-    if (position < 0 || position > currentPart.partTextLength) {
+    if (position < 0 || position >= currentPart.partTextLength) {
       return this.emitError(client, 'Incorrect reading position');
     }
 
     let newPartIndex = currentPartIndex;
     let newPosition = position;
+    let newPositionSendTimeoutMs = 0;
 
-    if (!isLastPart && position === currentPart.partTextLength) {
+    if (!isLastPart && position === currentPart.partTextLength - 1) {
       newPartIndex++;
       currentPart = structure[newPartIndex];
       newPosition = 0;
+      newPositionSendTimeoutMs = this.DELAY_BETWEEN_PARTS_MS;
     }
 
     session.currentReadingPosition = {
@@ -498,22 +624,26 @@ export class TeleprompterGateway
     await this.setActiveSession(presentationId, session);
     await this.checkCurrentReaderAvailability(presentationId, session);
 
-    client.broadcast
-      .to(room)
-      .emit(
-        'reading_position',
-        new ReadingPositionDto(currentPart.partId, newPosition),
-      );
+    setTimeout(() => {
+      this.server
+        .to(room)
+        .emit(
+          'reading_position',
+          new ReadingPositionDto(currentPart.partId, newPosition),
+        );
+    }, newPositionSendTimeoutMs);
 
     if (
       newPartIndex === structure.length - 1 &&
-      currentPart.partTextLength === newPosition
+      currentPart.partTextLength === newPosition + 1
     ) {
       const part = await this.presentationPartRepository.findOne({
         where: { presentationPartId: currentPart.partId },
       });
       if (part) {
-        await this.stopPresentation(part.presentationId);
+        setTimeout(async () => {
+          await this.stopPresentation(part.presentationId);
+        }, this.DELAY_BETWEEN_PARTS_MS);
       }
     }
   }
@@ -556,7 +686,7 @@ export class TeleprompterGateway
       session.userRecordedVideos.push(userRecordedVideos);
     }
     await this.setActiveSession(data.presentationId, session);
-    await this.emitRecordedVideosCountChange(
+    this.emitRecordedVideosCountChange(
       data.presentationId,
       userId,
       data.notUploadedVideosInPresentation,
@@ -611,15 +741,36 @@ export class TeleprompterGateway
       return;
     }
     const session = await this.getActiveSession(presentationId);
-    if (!session) {
-      return;
-    }
+    if (!session) return;
 
     if (!this.joinedUsers.get(presentationId)) {
       await this.setActiveSession(presentationId, null);
+      return;
     }
 
+    const previousPartsMap = new Map(
+      session.structure.map((part) => [part.partId, part.assigneeUserId]),
+    );
+
     session.currentPresentationStartDate = undefined;
+    session.currentReadingPosition = {
+      partId: session.structure[0]?.partId ?? 0,
+      position: 0,
+    };
+
+    session.structure = await this.getPartsStructure(presentationId);
+
+    for (const part of session.structure) {
+      const prevAssignee = previousPartsMap.get(part.partId);
+      if (prevAssignee !== part.assigneeUserId) {
+        this.emitPartReassignedEvent(
+          presentationId,
+          part.assigneeUserId,
+          part.partId,
+        );
+      }
+    }
+
     await this.setActiveSession(presentationId, session);
   }
 
@@ -649,18 +800,6 @@ export class TeleprompterGateway
       throw new NotFoundException('Session has not been started');
     }
 
-    if (activeSession.currentPresentationStartDate) {
-      const { partId: currentPartId } = activeSession.currentReadingPosition;
-      const currentPart = activeSession.structure.find(
-        (part) => part.partId === currentPartId,
-      );
-      if (currentPart?.assigneeUserId === userId) {
-        throw new ConflictException(
-          'You cannot change recording mode when your part is active',
-        );
-      }
-    }
-
     targetUser.isRecordingModeActive = isActive;
     this.emitRecordingModeChange(presentationId, userId, isActive);
   }
@@ -668,6 +807,7 @@ export class TeleprompterGateway
   private async checkCurrentReaderAvailability(
     presentationId: number,
     session: ActivePresentationDto,
+    isTimeout: boolean = false,
   ) {
     const currentReaderId = this.getActiveReaderId(session);
     const hasPresentationStarted = Boolean(
@@ -701,10 +841,13 @@ export class TeleprompterGateway
 
     await this.emitPartReassignRequiredEvent(
       presentationId,
+      session.awaitingConfirmationUserId ?? currentReaderId,
       session.currentReadingPosition.partId,
-      PartReassignReason.MissingAssignee,
+      isTimeout
+        ? PartReassignReason.AssigneeNotResponding
+        : PartReassignReason.MissingAssignee,
     );
-    await this.emitWaitingForUserEvent(presentationId, currentReaderId);
+    this.emitWaitingForUserEvent(presentationId, currentReaderId);
   }
 
   private isUserJoined(presentationId: number, userId: number): boolean {
@@ -749,6 +892,31 @@ export class TeleprompterGateway
         );
     }
 
+    session.missingUserId = undefined;
+
+    await this.setActiveSession(presentationId, session);
+    this.emitPartReassignedEvent(presentationId, readerId, currentPart.partId);
+  }
+
+  async updatePartAssignee(
+    presentationId: number,
+    partId: number,
+    assigneeUserId: number,
+  ) {
+    const session = await this.getActiveSession(presentationId);
+    if (!session) return;
+
+    const prev = session.structure.find((p) => p.partId === partId);
+    if (prev && prev.assigneeUserId !== assigneeUserId) {
+      this.emitPartReassignedEvent(presentationId, assigneeUserId, partId);
+    }
+
+    session.structure = session.structure.map((part) => {
+      if (part.partId === partId) {
+        return { ...part, assigneeUserId };
+      }
+      return part;
+    });
     await this.setActiveSession(presentationId, session);
   }
 }

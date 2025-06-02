@@ -4,17 +4,15 @@ import { Socket as BaseSocket } from 'socket.io/dist/socket';
 import { SocketData } from '../interface/SocketData';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import {Repository} from "typeorm";
-import {PresentationEntity} from "../entities/PresentationEntity";
-import {Role} from "../enum/Role";
+import { Role } from '../enum/Role';
 
 type Socket = BaseSocket<any, any, any, SocketData>;
 
 export abstract class BaseGateway implements OnGatewayConnection {
   protected constructor(
-      private readonly jwtService: JwtService,
-      private readonly configService: ConfigService,
-      private readonly allowedRoles: Role[] = [Role.User]
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly allowedRoles: Role[] = [Role.User],
   ) {}
 
   async handleConnection(client: Socket) {

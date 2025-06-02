@@ -13,6 +13,7 @@ import { PaymentsApiService } from './paymentsApi.service';
 import { BillingService } from './billing.service';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ExpiredTransactionsService } from './expired-transactions.service';
+import { PaymentsGateway } from './payments.gateway';
 
 @Module({
   controllers: [PaymentsController],
@@ -21,6 +22,7 @@ import { ExpiredTransactionsService } from './expired-transactions.service';
     PaymentsApiService,
     BillingService,
     ExpiredTransactionsService,
+    PaymentsGateway,
   ],
   imports: [
     AuthModule,

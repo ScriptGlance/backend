@@ -5,12 +5,14 @@ import {
   ManyToOne,
   JoinColumn,
   OneToOne,
+  Unique,
 } from 'typeorm';
 import { PresentationEntity } from './PresentationEntity';
 import { UserEntity } from './UserEntity';
 import { PresentationPartEntity } from './PresentationPartEntity';
 
 @Entity('participant')
+@Unique(['presentation', 'user'])
 export class ParticipantEntity {
   @PrimaryGeneratedColumn({ name: 'participant_id' })
   participantId: number;

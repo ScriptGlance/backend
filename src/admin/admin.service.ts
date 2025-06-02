@@ -7,7 +7,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { UserEntity } from '../common/entities/UserEntity';
 import {
   Brackets,
-  MoreThan,
   ObjectLiteral,
   Repository,
   SelectQueryBuilder,
@@ -29,6 +28,9 @@ import { PresentationEntity } from '../common/entities/PresentationEntity';
 import { VideoEntity } from '../common/entities/VideoEntity';
 import { PresentationStartEntity } from '../common/entities/PresentationStartEntity';
 import { PaymentsService } from '../payments/payments.service';
+import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
+import { ParticipantEntity } from '../common/entities/ParticipantEntity';
+import { TotalStatisticsDto } from './dto/TotalStatisticsDto';
 
 interface PaginationParams<TSortField> {
   limit: number;
@@ -51,6 +53,12 @@ export class AdminService {
     private readonly presentationStartRepository: Repository<PresentationStartEntity>,
     @InjectRepository(VideoEntity)
     private readonly videoRepository: Repository<VideoEntity>,
+    @InjectRepository(PresentationPartEntity)
+    private readonly presentationPartRepository: Repository<PresentationPartEntity>,
+    @InjectRepository(ParticipantEntity)
+    private readonly participantRepository: Repository<ParticipantEntity>,
+    @InjectRepository(PresentationEntity)
+    private readonly presentationRepository: Repository<PresentationEntity>,
     private readonly userMapper: UserMapper,
     private readonly moderatorMapper: ModeratorMapper,
     private readonly emailService: EmailService,
@@ -158,9 +166,128 @@ export class AdminService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
     if (user.subscription) {
       await this.paymentsService.cancelSubscription(userId);
     }
+
+    // Fetch all user's participants with their IDs
+    const userParticipants = await this.participantRepository
+      .createQueryBuilder('participant')
+      .select('participant.participantId')
+      .addSelect('participant.presentationId')
+      .where('participant.userId = :userId', { userId })
+      .getMany();
+
+    if (userParticipants.length > 0) {
+      const participantIds = userParticipants.map((p) => p.participantId);
+
+      // 1. Update ALL presentations where any of user's participants is an owner
+      // This must be done first to break the foreign key constraint
+      await this.presentationRepository
+        .createQueryBuilder()
+        .update()
+        .set({ ownerParticipantId: null })
+        .where('ownerParticipantId IN (:...participantIds)', {
+          participantIds,
+        })
+        .execute();
+
+      // 2. Find the presentations owned by the user - for soft deletion
+      const ownedPresentations = await this.presentationRepository
+        .createQueryBuilder('presentation')
+        .select('presentation.presentationId')
+        .where('presentation.ownerParticipantId IS NULL')
+        .andWhere('presentation.presentationId IN (:...presentationIds)', {
+          presentationIds: userParticipants.map((p) => p.presentationId),
+        })
+        .getMany();
+
+      // 3. Soft delete user's presentations (that had their owner reference nullified)
+      if (ownedPresentations.length > 0) {
+        const ownedPresentationIds = ownedPresentations.map(
+          (p) => p.presentationId,
+        );
+
+        await this.presentationRepository
+          .createQueryBuilder()
+          .softDelete()
+          .where('presentationId IN (:...ids)', { ids: ownedPresentationIds })
+          .execute();
+      }
+
+      // 4. Handle presentation parts - reassign parts to presentation owners for presentations where user is a participant
+      const presentationIdsWithParts = userParticipants.map(
+        (p) => p.presentationId,
+      );
+
+      // Fetch presentations with their owner participant IDs
+      const presentationsWithOwners = await this.presentationRepository
+        .createQueryBuilder('pres')
+        .select('pres.presentationId')
+        .addSelect('pres.ownerParticipantId')
+        .where('pres.presentationId IN (:...ids)', {
+          ids: presentationIdsWithParts,
+        })
+        .andWhere('pres.ownerParticipantId IS NOT NULL')
+        .andWhere('pres.deletedAt IS NULL')
+        .getMany();
+
+      // Update presentation parts for each presentation where an owner exists
+      for (const presentation of presentationsWithOwners) {
+        if (presentation.ownerParticipantId) {
+          await this.presentationPartRepository
+            .createQueryBuilder()
+            .update()
+            .set({ assigneeParticipantId: presentation.ownerParticipantId })
+            .where('presentationId = :presId', {
+              presId: presentation.presentationId,
+            })
+            .andWhere('assigneeParticipantId IN (:...participantIds)', {
+              participantIds,
+            })
+            .execute();
+        }
+      }
+
+      // 5. Set remaining parts' assigneeParticipantId to null
+      await this.presentationPartRepository
+        .createQueryBuilder()
+        .update()
+        .set({ assigneeParticipantId: null })
+        .where('assigneeParticipantId IN (:...participantIds)', {
+          participantIds,
+        })
+        .execute();
+
+      for (const participantId of participantIds) {
+        try {
+          const referencingPresentations = await this.presentationRepository
+            .createQueryBuilder('pres')
+            .where('pres.ownerParticipantId = :participantId', {
+              participantId,
+            })
+            .getCount();
+
+          if (referencingPresentations > 0) {
+            await this.presentationRepository
+              .createQueryBuilder()
+              .update()
+              .set({ ownerParticipantId: null })
+              .where('ownerParticipantId = :participantId', { participantId })
+              .execute();
+          }
+
+          await this.participantRepository.delete(participantId);
+        } catch (error) {
+          console.error(
+            `Failed to delete participant ${participantId}:`,
+            error,
+          );
+        }
+      }
+    }
+
     await this.userRepository.softRemove(user);
 
     return {
@@ -231,7 +358,9 @@ export class AdminService {
       await this.moderatorRepository.save(moderator);
     }
 
-    const loginLink = `${process.env.FRONTEND_URL}/${roleType === 'moderator' ? 'moderator/' : ''}login`;
+    const loginLink = `${process.env.FRONTEND_URL}/${
+      roleType === 'moderator' ? 'moderator/' : ''
+    }login`;
     const roleName = roleType === 'user' ? 'користувача' : 'модератора';
 
     const html = `
@@ -282,6 +411,7 @@ export class AdminService {
   async inviteModerator(inviteDto: InviteDto): Promise<StandardResponse<void>> {
     return this.invite(inviteDto, 'moderator');
   }
+
   private generateTemporaryPassword() {
     return randomBytes(6).toString('hex');
   }
@@ -383,5 +513,32 @@ export class AdminService {
     offset: number,
   ): Promise<StandardResponse<StatisticsItemDto[]>> {
     return this.getStatistics(limit, offset, 'monthly');
+  }
+
+  async getTotalStatistics(): Promise<StandardResponse<TotalStatisticsDto>> {
+    const totalUsers = await this.userRepository.count();
+
+    const { totalSeconds = '0' } =
+      (await this.presentationStartRepository
+        .createQueryBuilder('ps')
+        .select(
+          'SUM(EXTRACT(EPOCH FROM (ps.endDate - ps.startDate)))',
+          'totalSeconds',
+        )
+        .where('ps.endDate IS NOT NULL')
+        .getRawOne<{ totalSeconds: string }>()) || {};
+
+    const totalVideos = await this.videoRepository.count();
+
+    return {
+      data: {
+        total_users_count: totalUsers,
+        total_presentation_duration_seconds: Math.round(
+          Number(totalSeconds) || 0,
+        ),
+        videos_recorded_count: totalVideos,
+      },
+      error: false,
+    };
   }
 }

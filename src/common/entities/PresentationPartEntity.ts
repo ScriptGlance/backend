@@ -18,7 +18,7 @@ export class PresentationPartEntity {
   presentationId: number;
 
   @Column({ name: 'assignee_participant_id', nullable: true })
-  assigneeParticipantId?: number;
+  assigneeParticipantId?: number | null;
 
   @Column({ name: 'name', length: 255 })
   name: string;

@@ -20,6 +20,7 @@ import {
   FREE_VIDEOS_PER_PRESENTATION,
   MAX_FREE_PARTICIPANTS_COUNT,
   MAX_FREE_RECORDING_TIME_SECONDS,
+  VIDEO_DURATION_MAX_TAIL_SECONDS,
 } from '../common/Constants';
 
 import { UpdatePresentationDto } from './dto/UpdatePresentationDto';
@@ -42,8 +43,6 @@ import { PartUpdateDto } from './dto/PartUpdateDto';
 import { CursorPositionDto } from './dto/CursorPositionDto';
 import { PartsGateway } from './parts.gateway';
 import { PartTarget } from '../common/enum/PartTarget';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import Redis from 'ioredis';
 import { StructureItemDto } from './dto/StructureItemDto';
 import { PartEventDto } from './dto/PartEventDto';
 import { PartEventType } from '../common/enum/PartEventType';
@@ -60,6 +59,8 @@ import { ActivePresentationWithUsersDto } from './dto/ActivePresentationWithUser
 import { TeleprompterGateway } from './teleprompter.gateway';
 import { UserEntity } from '../common/entities/UserEntity';
 import { VideosLeftDto } from './dto/VideosLeftDto';
+import { AcceptInvitationDto } from './dto/AcceptInvitationDto';
+import { PresentationPartContentService } from './presentation-part-content.service';
 
 ffmpeg.setFfprobePath('ffprobe');
 
@@ -80,8 +81,7 @@ export class PresentationsService {
     private readonly presentationsMapper: PresentationMapper,
     private readonly presentationsGateway: PresentationsGateway,
     private readonly partsGateway: PartsGateway,
-    @InjectRedis()
-    private readonly redis: Redis,
+    private readonly presentationPartContentService: PresentationPartContentService,
     @InjectRepository(VideoEntity)
     private readonly videoRepository: Repository<VideoEntity>,
     @InjectRepository(PresentationStartEntity)
@@ -134,7 +134,8 @@ export class PresentationsService {
     userId: number,
   ): Promise<StandardResponse<PresentationStatsResponseDto>> {
     const presentationCount = await this.presentationRepository.count({
-      where: { owner: { userId } },
+      where: { participants: { user: { userId } } },
+      relations: ['participants'],
     });
 
     const invitedParticipants = await this.participantRepository
@@ -147,11 +148,22 @@ export class PresentationsService {
       .select('participantUser.userId')
       .distinct(true)
       .getCount();
+
+    const recordingsMade = await this.videoRepository
+      .createQueryBuilder('video')
+      .innerJoin('video.presentationStart', 'ps')
+      .innerJoin('ps.presentation', 'p')
+      .innerJoin('p.participants', 'participant')
+      .innerJoin('participant.user', 'participantUser')
+      .where('video.userUserId = :userId', { userId })
+      .andWhere('participantUser.userId = :userId', { userId })
+      .getCount();
+
     return {
       data: {
         presentation_count: presentationCount,
         invited_participants: invitedParticipants,
-        recordings_made: 0,
+        recordings_made: recordingsMade,
       },
       error: false,
     };
@@ -161,8 +173,13 @@ export class PresentationsService {
     userId: number,
     limit: number,
     offset: number,
+    search: string,
+    sort: 'byUpdatedAt' | 'byName' | 'byCreatedAt' | 'byParticipantsCount',
+    owner: 'me' | 'others' | 'all',
+    lastChange: 'today' | 'lastWeek' | 'lastMonth' | 'lastYear' | 'allTime',
+    type: 'individual' | 'group' | 'all',
   ): Promise<StandardResponse<PresentationDto[]>> {
-    const entities = await this.presentationRepository
+    const query = this.presentationRepository
       .createQueryBuilder('presentation')
       .leftJoinAndSelect('presentation.owner', 'owner')
       .leftJoinAndSelect('owner.user', 'ownerUser')
@@ -180,12 +197,98 @@ export class PresentationsService {
         'partPrem',
         'partPrem.user_id = participantUser.user_id',
       )
-      .where('ownerUser.user_id = :userId', { userId })
-      .orWhere('participantUser.user_id = :userId', { userId })
-      .orderBy('presentation.modifiedAt', 'DESC')
-      .skip(offset)
-      .take(limit)
-      .getMany();
+      .addSelect(
+        `(SELECT COUNT(p.participant_id) FROM participant p WHERE p.presentation_id = presentation.presentation_id)`,
+        'participant_count',
+      );
+
+    if (owner === 'me') {
+      query.andWhere('ownerUser.user_id = :userId', { userId });
+    } else if (owner === 'others') {
+      query
+        .andWhere('ownerUser.user_id != :userId', { userId })
+        .andWhere('participantUser.user_id = :userId', { userId });
+    } else {
+      query.andWhere(
+        '(ownerUser.user_id = :userId OR participantUser.user_id = :userId)',
+        { userId },
+      );
+    }
+
+    if (search && search.trim()) {
+      query.andWhere('presentation.name ILIKE :search', {
+        search: `%${search.trim()}%`,
+      });
+    }
+
+    const now = new Date();
+    if (lastChange === 'today') {
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+      query.andWhere('presentation.modifiedAt >= :startDate', {
+        startDate: todayStart,
+      });
+    } else if (lastChange === 'lastWeek') {
+      const weekAgo = new Date(now);
+      weekAgo.setDate(now.getDate() - 7);
+      query.andWhere('presentation.modifiedAt >= :startDate', {
+        startDate: weekAgo,
+      });
+    } else if (lastChange === 'lastMonth') {
+      const monthAgo = new Date(now);
+      monthAgo.setMonth(now.getMonth() - 1);
+      query.andWhere('presentation.modifiedAt >= :startDate', {
+        startDate: monthAgo,
+      });
+    } else if (lastChange === 'lastYear') {
+      const yearAgo = new Date(now);
+      yearAgo.setFullYear(now.getFullYear() - 1);
+      query.andWhere('presentation.modifiedAt >= :startDate', {
+        startDate: yearAgo,
+      });
+    }
+
+    if (type === 'individual') {
+      query.andWhere((qb) => {
+        const subQuery = qb
+          .subQuery()
+          .select('COUNT(p.participant_id)')
+          .from(ParticipantEntity, 'p')
+          .where('p.presentation_id = presentation.presentation_id')
+          .getQuery();
+        return `${subQuery} = 1`;
+      });
+    } else if (type === 'group') {
+      query.andWhere((qb) => {
+        const subQuery = qb
+          .subQuery()
+          .select('COUNT(p.participant_id)')
+          .from(ParticipantEntity, 'p')
+          .where('p.presentation_id = presentation.presentation_id')
+          .getQuery();
+        return `${subQuery} > 1`;
+      });
+    }
+
+    switch (sort) {
+      case 'byName':
+        query.orderBy('presentation.name', 'ASC');
+        break;
+      case 'byCreatedAt':
+        query.orderBy('presentation.createdAt', 'DESC');
+        break;
+      case 'byParticipantsCount':
+        query.orderBy('participant_count', 'DESC');
+        break;
+      case 'byUpdatedAt':
+      default:
+        query.orderBy('presentation.modifiedAt', 'DESC');
+        break;
+    }
+
+    query.skip(offset).take(limit);
+
+    const entities = await query.getMany();
 
     return {
       data: this.presentationsMapper.toPresentationList(entities),
@@ -237,8 +340,19 @@ export class PresentationsService {
         `You are not the owner of presentation ${id}`,
       );
     }
-    Object.assign(presentation, dto);
-    await this.presentationRepository.save(presentation);
+
+    if (!dto.name) {
+      throw new BadRequestException('Presentation name is required');
+    }
+
+    await this.presentationRepository.update(
+      {
+        presentationId: id,
+      },
+      {
+        name: dto.name,
+      },
+    );
     this.presentationsGateway.emitPresentationEvent(
       id,
       PresentationEventType.NameChanged,
@@ -299,31 +413,45 @@ export class PresentationsService {
       where: { participantId: id },
       relations: ['user', 'presentation'],
     });
-    
+
     if (!participant) {
       throw new NotFoundException(`Participant ${id} not found`);
     }
-    
+
     const presentationId = participant.presentation.presentationId;
     const presentation = await this.findOneById(presentationId, userId);
-    
+
     if (presentation.owner.userId !== userId) {
       throw new ForbiddenException(
         `You are not the owner of presentation ${presentationId}`,
       );
     }
-    
+
     if (participant.user.userId === userId) {
       throw new ForbiddenException(
         `You cannot remove yourself from presentation ${presentationId}`,
       );
     }
-    
+
+    await this.presentationPartRepository.update(
+      {
+        presentationId: presentationId,
+        assigneeParticipantId: participant.participantId,
+      },
+      {
+        assigneeParticipantId: presentation.owner.participantId,
+      },
+    );
+
     await this.participantRepository.remove(participant);
-    
+
     this.presentationsGateway.emitPresentationEvent(
       presentationId,
       PresentationEventType.ParticipantsChanged,
+    );
+    this.presentationsGateway.emitPresentationEvent(
+      presentationId,
+      PresentationEventType.TextChanged,
     );
     return {
       error: false,
@@ -355,11 +483,10 @@ export class PresentationsService {
     return randomBytes(16).toString('hex');
   }
 
-  //TODO make invitation invalid after use
   async acceptInvitation(
     userId: number,
     code: string,
-  ): Promise<StandardResponse<any>> {
+  ): Promise<StandardResponse<AcceptInvitationDto>> {
     const invitation = await this.invitationRepository.findOne({
       where: { code },
       relations: ['presentation', 'presentation.owner'],
@@ -371,13 +498,13 @@ export class PresentationsService {
     const userInvitation = await this.userInvitationRepository.findOne({
       where: {
         userId,
-        invitationId: invitation.invitationId
-      }
+        invitationId: invitation.invitationId,
+      },
     });
-    
+
     if (userInvitation) {
       throw new ForbiddenException(
-        `You have already used this invitation or were removed from this presentation`
+        `You have already used this invitation or were removed from this presentation`,
       );
     }
 
@@ -410,7 +537,7 @@ export class PresentationsService {
         'u.userPremium',
         UserWithPremiumEntity,
         'prem',
-        'prem.user_id = prem.user_id',
+        'prem.user_id = u.user_id',
       )
       .where('u.user_id = :id', { id: invitation.presentation.owner.userId })
       .getOne();
@@ -430,39 +557,23 @@ export class PresentationsService {
       ),
     });
     await this.participantRepository.save(participant);
-    
+
     const newUserInvitation = this.userInvitationRepository.create({
       userId,
-      invitationId: invitation.invitationId
+      invitationId: invitation.invitationId,
     });
     await this.userInvitationRepository.save(newUserInvitation);
-    
+
     this.presentationsGateway.emitPresentationEvent(
       invitation.presentation.presentationId,
       PresentationEventType.ParticipantsChanged,
     );
     return {
       error: false,
+      data: {
+        presentation_id: invitation.presentation.presentationId,
+      },
     };
-  }
-
-  private async getPresentationPartContent(
-    partId: number,
-    target: PartTarget,
-    fallback: string,
-  ): Promise<string> {
-    const key = `editing:part:${partId}:${target}`;
-    const raw = await this.redis.get(key);
-    if (!raw) return fallback;
-    try {
-      const { content } = JSON.parse(raw) as {
-        content: string;
-        version: number;
-      };
-      return content;
-    } catch {
-      return fallback;
-    }
   }
 
   async getStructure(
@@ -480,19 +591,21 @@ export class PresentationsService {
     const structure: StructureItemDto[] = [];
 
     for (const p of parts) {
-      const name = await this.getPresentationPartContent(
-        p.presentationPartId,
-        PartTarget.Name,
-        p.name,
-      );
+      const name =
+        await this.presentationPartContentService.getPresentationPartContent(
+          p.presentationPartId,
+          PartTarget.Name,
+          p.name,
+        );
 
-      const text = await this.getPresentationPartContent(
-        p.presentationPartId,
-        PartTarget.Text,
-        p.text,
-      );
+      const text =
+        await this.presentationPartContentService.getPresentationPartContent(
+          p.presentationPartId,
+          PartTarget.Text,
+          p.text,
+        );
 
-      const words = text
+      const words = text.content
         .trim()
         .split(/\s+/)
         .filter((w) => w.length > 0).length;
@@ -500,7 +613,7 @@ export class PresentationsService {
 
       structure.push(
         this.presentationsMapper.toStructureItemDto(
-          { ...p, name, text },
+          { ...p, name: name.content, text: text.content },
           words,
         ),
       );
@@ -524,18 +637,30 @@ export class PresentationsService {
 
     const result: PartDto[] = [];
     for (const p of parts) {
-      const name = await this.getPresentationPartContent(
-        p.presentationPartId,
-        PartTarget.Name,
-        p.name,
-      );
-      const text = await this.getPresentationPartContent(
-        p.presentationPartId,
-        PartTarget.Text,
-        p.text,
-      );
+      const name =
+        await this.presentationPartContentService.getPresentationPartContent(
+          p.presentationPartId,
+          PartTarget.Name,
+          p.name,
+        );
+      const text =
+        await this.presentationPartContentService.getPresentationPartContent(
+          p.presentationPartId,
+          PartTarget.Text,
+          p.text,
+        );
 
-      result.push(this.presentationsMapper.toPartDto({ ...p, name, text }));
+      result.push(
+        this.presentationsMapper.toPartDto(
+          {
+            ...p,
+            name: name.content,
+            text: text.content,
+          },
+          text.version,
+          name.version,
+        ),
+      );
     }
 
     return { data: result, error: false };
@@ -562,7 +687,7 @@ export class PresentationsService {
     await this.presentationPartRepository
       .createQueryBuilder()
       .update(PresentationPartEntity)
-      .set({ order: () => `"order" 1` })
+      .set({ order: () => `"order" + 1` })
       .where('"presentation_id" = :pid AND "order" >= :ord', {
         pid: presentationId,
         ord: data.part_order,
@@ -626,7 +751,7 @@ export class PresentationsService {
         await this.presentationPartRepository
           .createQueryBuilder()
           .update(PresentationPartEntity)
-          .set({ order: () => `"order" 1` })
+          .set({ order: () => `"order" + 1` })
           .where(
             `"presentation_id" = :pid AND "order" >= :newOrd AND "order" < :oldOrd`,
             { pid: presentationId, newOrd: newOrder, oldOrd: oldOrder },
@@ -663,9 +788,23 @@ export class PresentationsService {
         PartEventType.PartUpdated,
         part.presentationPartId,
         part.order,
-        part.assigneeParticipantId,
+        part.assigneeParticipantId ?? undefined,
       ),
     );
+
+    if (data.part_assignee_participant_id !== undefined) {
+      const participant = await this.participantRepository.findOne({
+        where: { participantId: data.part_assignee_participant_id },
+        select: ['userId'],
+      });
+      if (participant) {
+        await this.teleprompterGateway.updatePartAssignee(
+          part.presentationId,
+          partId,
+          participant.userId,
+        );
+      }
+    }
 
     return {
       data: this.presentationsMapper.toPartDto(part),
@@ -737,6 +876,7 @@ export class PresentationsService {
     return new Promise((resolve, reject) => {
       ffmpeg.ffprobe(path, (err, metadata) => {
         if (err) {
+          // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
           return reject(err);
         }
         const ms = Math.round((metadata.format.duration ?? 0) * 1000);
@@ -745,7 +885,10 @@ export class PresentationsService {
     });
   }
 
-  private async generateThumbnail(videoPath: string): Promise<string> {
+  private async generateThumbnail(
+    videoPath: string,
+    durationMs: number,
+  ): Promise<string> {
     const previewsDir = './uploads/previews';
     await fsPromises.mkdir(previewsDir, { recursive: true });
 
@@ -756,13 +899,15 @@ export class PresentationsService {
     try {
       await fsPromises.access(outputPath);
       return outputPath;
-    } catch {}
+    } catch { /* empty */ }
+
+    const midSeconds = Math.floor(durationMs / 1000 / 2);
 
     return new Promise((resolve, reject) => {
       ffmpeg(videoPath)
         .screenshots({
           count: 1,
-          timemarks: ['0'],
+          timemarks: [midSeconds.toString()],
           folder: previewsDir,
           filename: fileName,
           size: '320x?',
@@ -811,8 +956,9 @@ export class PresentationsService {
         'u.userPremium',
         UserWithPremiumEntity,
         'prem',
-        'prem.user_id = prem.user_id',
+        'prem.user_id = u.user_id',
       )
+      .where('u.user_id = :id', { id: userId })
       .getOne();
     const userHasSubscription = user?.userPremium?.has_premium === true;
 
@@ -822,6 +968,7 @@ export class PresentationsService {
         .innerJoin('v.presentationStart', 'ps')
         .innerJoin('ps.presentation', 'p')
         .where('p.presentation_id = :pid', { pid: presentationId })
+        .andWhere('v.userUserId = :uid', { uid: userId })
         .getCount();
 
       if (existingVideosCount >= FREE_VIDEOS_PER_PRESENTATION) {
@@ -834,14 +981,16 @@ export class PresentationsService {
     const durationMs = await this.probeDurationMs(file.path);
     if (
       !userHasSubscription &&
-      durationMs > MAX_FREE_RECORDING_TIME_SECONDS * 1000
+      durationMs >
+        (MAX_FREE_RECORDING_TIME_SECONDS + VIDEO_DURATION_MAX_TAIL_SECONDS) *
+          1000
     ) {
       throw new BadRequestException(
         `Free videos must be at most ${MAX_FREE_RECORDING_TIME_SECONDS} seconds long`,
       );
     }
 
-    const thumbnailPath = await this.generateThumbnail(file.path);
+    const thumbnailPath = await this.generateThumbnail(file.path, durationMs);
     const shareCode = this.generatePresentationShareCode();
     const videoEntity = this.videoRepository.create({
       presentationStart,
@@ -1006,7 +1155,8 @@ export class PresentationsService {
       .innerJoin('ps.presentation', 'p', 'p.presentationId = :pid', {
         pid: presentationId,
       })
-      .innerJoinAndSelect('video.user', 'u');
+      .innerJoinAndSelect('video.user', 'u')
+      .orderBy('video.recordingStartDate', 'DESC');
 
     if (!isOwner) {
       queryBuilder.andWhere('u.userId = :uid', { uid: userId });
@@ -1196,6 +1346,11 @@ export class PresentationsService {
     await this.findOneById(presentationId, userId);
     const activePresentation =
       await this.teleprompterGateway.getActivePresentation(presentationId);
+
+    if (!activePresentation?.currentPresentationStartDate) {
+      throw new NotFoundException('No active presentation session found');
+    }
+
     if (activePresentation?.currentOwnerUserId !== userId) {
       throw new ForbiddenException(
         'You are not the owner of the presentation or there are no users in the active presentation',
@@ -1231,4 +1386,3 @@ export class PresentationsService {
     };
   }
 }
-
