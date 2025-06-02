@@ -375,7 +375,32 @@ export class PresentationsService {
         `You are not the owner of presentation ${id}`,
       );
     }
-    await this.presentationRepository.softRemove(presentation);
+
+    await this.presentationRepository.manager.transaction(async (manager) => {
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(PresentationPartEntity)
+        .where('presentationId = :id', { id: presentation.presentationId })
+        .execute();
+
+      await manager
+        .createQueryBuilder()
+        .update(PresentationEntity)
+        .set({ ownerParticipantId: null })
+        .where('presentationId = :id', { id: presentation.presentationId })
+        .execute();
+
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(ParticipantEntity)
+        .where('presentationId = :id', { id: presentation.presentationId })
+        .execute();
+
+      await manager.getRepository(PresentationEntity).softRemove(presentation);
+    });
+
     return {
       error: false,
     };
@@ -418,7 +443,7 @@ export class PresentationsService {
       throw new NotFoundException(`Participant ${id} not found`);
     }
 
-    const presentationId = participant.presentation.presentationId;
+    const presentationId = participant.presentation!.presentationId;
     const presentation = await this.findOneById(presentationId, userId);
 
     if (presentation.owner.userId !== userId) {
@@ -899,7 +924,9 @@ export class PresentationsService {
     try {
       await fsPromises.access(outputPath);
       return outputPath;
-    } catch { /* empty */ }
+    } catch {
+      /* empty */
+    }
 
     const midSeconds = Math.floor(durationMs / 1000 / 2);
 
