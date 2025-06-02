@@ -30,6 +30,7 @@ import { PresentationStartEntity } from '../common/entities/PresentationStartEnt
 import { PaymentsService } from '../payments/payments.service';
 import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
 import { ParticipantEntity } from '../common/entities/ParticipantEntity';
+import { TotalStatisticsDto } from './dto/TotalStatisticsDto';
 
 interface PaginationParams<TSortField> {
   limit: number;
@@ -410,6 +411,7 @@ export class AdminService {
   async inviteModerator(inviteDto: InviteDto): Promise<StandardResponse<void>> {
     return this.invite(inviteDto, 'moderator');
   }
+
   private generateTemporaryPassword() {
     return randomBytes(6).toString('hex');
   }
@@ -511,5 +513,32 @@ export class AdminService {
     offset: number,
   ): Promise<StandardResponse<StatisticsItemDto[]>> {
     return this.getStatistics(limit, offset, 'monthly');
+  }
+
+  async getTotalStatistics(): Promise<StandardResponse<TotalStatisticsDto>> {
+    const totalUsers = await this.userRepository.count();
+
+    const { totalSeconds = '0' } =
+      (await this.presentationStartRepository
+        .createQueryBuilder('ps')
+        .select(
+          'SUM(EXTRACT(EPOCH FROM (ps.endDate - ps.startDate)))',
+          'totalSeconds',
+        )
+        .where('ps.endDate IS NOT NULL')
+        .getRawOne<{ totalSeconds: string }>()) || {};
+
+    const totalVideos = await this.videoRepository.count();
+
+    return {
+      data: {
+        total_users_count: totalUsers,
+        total_presentation_duration_seconds: Math.round(
+          Number(totalSeconds) || 0,
+        ),
+        videos_recorded_count: totalVideos,
+      },
+      error: false,
+    };
   }
 }
