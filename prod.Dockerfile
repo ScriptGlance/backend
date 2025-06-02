@@ -37,6 +37,9 @@ RUN apk del python3 make g++
 
 COPY --from=builder --chown=appuser:appgroup /usr/src/app/dist ./dist
 
+RUN mkdir -p /usr/src/app/uploads && \
+    chown -R appuser:appgroup /usr/src/app/uploads
+
 EXPOSE 3000
 USER appuser
 
