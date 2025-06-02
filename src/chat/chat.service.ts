@@ -179,7 +179,7 @@ export class ChatService {
     moderatorId: number,
   ): Promise<StandardResponse<ModeratorUnreadMessagesCountsDto>> {
     const generalChatCount = await this.chatRepository.count({
-      where: { assignedModerator: IsNull() },
+      where: { assignedModerator: IsNull(), isActive: true },
     });
 
     const unreadModeratorMessagesCount = await this.chatMessageRepository.count(
