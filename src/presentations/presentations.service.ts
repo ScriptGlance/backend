@@ -424,9 +424,9 @@ export class PresentationsService {
       .andWhere('u.deleted_at IS NULL')
       .getMany();
     return {
-      data: participants.map((p) =>
-        this.presentationsMapper.toParticipantDto(p),
-      ),
+      data: participants
+        .filter((p) => p.user)
+        .map((p) => this.presentationsMapper.toParticipantDto(p)),
       error: false,
     };
   }
