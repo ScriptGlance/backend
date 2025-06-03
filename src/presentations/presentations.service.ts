@@ -421,6 +421,7 @@ export class PresentationsService {
         'uwp.user_id = u.user_id',
       )
       .where('p.presentation_id = :id', { id })
+      .andWhere('u.deleted_at IS NULL')
       .getMany();
     return {
       data: participants.map((p) =>
