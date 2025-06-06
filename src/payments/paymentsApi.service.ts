@@ -1,4 +1,3 @@
-import { PAYMENTS_API_URL } from '../common/Constants';
 import { lastValueFrom, Observable } from 'rxjs';
 import { AxiosError, AxiosResponse } from 'axios';
 import { HttpService } from '@nestjs/axios';
@@ -23,7 +22,7 @@ export class PaymentsApiService {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
     retryCount = 0,
   ): Promise<T> {
-    const url = `${PAYMENTS_API_URL}/${urlPart}`;
+    const url = `${process.env.PAYMENTS_API_URL}/${urlPart}`;
     const headers = {
       'Content-Type': 'application/json',
       'X-Token': process.env.PAYMENTS_API_TOKEN,

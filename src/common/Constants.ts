@@ -17,7 +17,6 @@ export const MIN_PAYMENT_AMOUNT = 1;
 export const USD_CURRENCY_CODE = 840;
 export const UAH_CURRENCY_CODE = 980;
 export const CHAT_EXPIRATION_TIME_SECONDS = 3 * 24 * 60 * 60;
-export const PAYMENTS_API_URL = 'https://api.monobank.ua';
 export const HTTP_MODULE_TIMEOUT_MS = 5000;
 export const WEBHOOK_PUBLIC_KEY_MIN_UPDATE_INTERVAL_MS = 60 * 60 * 1000;
 export const WEBHOOK_CACHE_EXPIRATION_TIME_MS = 60 * 1000;
