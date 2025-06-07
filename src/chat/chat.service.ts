@@ -185,7 +185,7 @@ export class ChatService {
     const unreadModeratorMessagesCount = await this.chatMessageRepository.count(
       {
         where: {
-          chat: { assignedModerator: { moderatorId } },
+          chat: { assignedModerator: { moderatorId }, isActive: true },
           isWrittenByModerator: false,
           isRead: false,
         },
