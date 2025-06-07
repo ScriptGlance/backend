@@ -6,7 +6,7 @@ import {
 import { ChatMessageDto } from './dto/ChatMessageDto';
 import { StandardResponse } from '../common/interface/StandardResponse';
 import { ChatEntity } from '../common/entities/ChatEntity';
-import { IsNull, Repository, In, Not } from 'typeorm';
+import { IsNull, Repository} from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ChatMapper } from './chat.mapper';
 import { ChatMessageEntity } from '../common/entities/ChatMessageEntity';
@@ -35,13 +35,14 @@ export class ChatService {
   ): Promise<StandardResponse<ChatMessageDto[]>> {
     const chat = await this.chatRepository.findOne({
       where: { user: { userId }, isActive: true },
+      relations: ['user'],
     });
 
     if (!chat) {
       return { data: [], error: false };
     }
 
-    await this.markMessagesAsRead(chat.chatId, true);
+    await this.markMessagesAsRead(chat.user.userId, true);
 
     const messages = await this.chatMessageRepository.find({
       where: { chat: { chatId: chat.chatId } },
@@ -156,23 +157,32 @@ export class ChatService {
   async markUserChatAsRead(userId: number): Promise<StandardResponse<void>> {
     const chat = await this.chatRepository.findOne({
       where: { user: { userId }, isActive: true },
-      select: ['chatId'],
+      relations: ['user'],
     });
 
     if (!chat) {
       return { error: false };
     }
 
-    await this.markMessagesAsRead(chat.chatId, true);
+    await this.markMessagesAsRead(chat.user.userId, true);
 
     return { error: false };
   }
 
-  private async markMessagesAsRead(chatId: number, isUser: boolean) {
-    await this.chatMessageRepository.update(
-      { chat: { chatId }, isWrittenByModerator: isUser },
-      { isRead: true },
-    );
+  private async markMessagesAsRead(userId: number, isUser: boolean) {
+    const subQuery = this.chatRepository
+        .createQueryBuilder('chat')
+        .select('chat.chat_id')
+        .where('chat.userUserId = :userId', { userId });
+
+    await this.chatMessageRepository
+        .createQueryBuilder()
+        .update(ChatMessageEntity)
+        .set({ isRead: true })
+        .where(`chatChatId IN (${subQuery.getQuery()})`)
+        .andWhere('isWrittenByModerator = :isUser', { isUser })
+        .setParameters({ userId, isUser })
+        .execute();
   }
 
   async getModeratorChatsUnreadCounts(
@@ -281,14 +291,14 @@ export class ChatService {
   async markModeratorChatAsRead(moderatorId: number, chatId: number) {
     const chat = await this.chatRepository.findOne({
       where: { chatId, assignedModerator: { moderatorId }, isActive: true },
-      select: ['chatId'],
+      relations: ['user'],
     });
 
     if (!chat) {
       throw new NotFoundException('Chat not found');
     }
 
-    await this.markMessagesAsRead(chat.chatId, false);
+    await this.markMessagesAsRead(chat.user.userId, false);
 
     return { error: false };
   }
@@ -325,7 +335,7 @@ export class ChatService {
     }
 
     if (chat.assignedModerator) {
-      await this.markMessagesAsRead(chatId, false);
+      await this.markMessagesAsRead(chat.user.userId, false);
     }
 
     const userId = chat.user.userId;
