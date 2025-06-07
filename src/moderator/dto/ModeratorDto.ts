@@ -22,4 +22,9 @@ export class ModeratorDto {
     example: 'https://cdn.example.com/avatars/42.png',
   })
   avatar?: string | null;
+
+  @ApiProperty({
+    description: 'Is temporary password',
+  })
+  is_temporary_password: boolean;
 }

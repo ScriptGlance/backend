@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ModeratorController } from './moderator.controller';
 import { ModeratorService } from './moderator.service';
-import {TypeOrmModule} from "@nestjs/typeorm";
-import {AuthModule} from "../auth/auth.module";
-import {MulterModule} from "@nestjs/platform-express";
-import {ModeratorMapper} from "./moderator.mapper";
-import {ModeratorEntity} from "../common/entities/ModeratorEntity";
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from '../auth/auth.module';
+import { MulterModule } from '@nestjs/platform-express';
+import { ModeratorMapper } from './moderator.mapper';
+import { ModeratorEntity } from '../common/entities/ModeratorEntity';
 
 @Module({
   controllers: [ModeratorController],
