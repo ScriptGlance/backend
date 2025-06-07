@@ -15,7 +15,7 @@ import { UserUnreadMessagesCountDto } from './dto/UserUnreadMessagesCountDto';
 import { ModeratorUnreadMessagesCountsDto } from './dto/ModeratorUnreadMessagesCountsDto';
 import { ChatDto } from './dto/ChatDto';
 import { ModeratorEntity } from '../common/entities/ModeratorEntity';
-import {CHAT_EXPIRATION_TIME_SECONDS} from "../common/Constants";
+import { CHAT_EXPIRATION_TIME_SECONDS } from '../common/Constants';
 
 @Injectable()
 export class ChatService {
@@ -265,17 +265,17 @@ export class ChatService {
 
   private async mapToChatDto(chat: ChatEntity) {
     const lastMessage = await this.chatMessageRepository.findOne({
-      where: {chat: {chatId: chat.chatId}},
-      order: {sentDate: 'DESC'},
+      where: { chat: { chatId: chat.chatId } },
+      order: { sentDate: 'DESC' },
     });
     const unreadCount = await this.chatMessageRepository.count({
       where: {
-        chat: {chatId: chat.chatId, isActive: true},
+        chat: { chatId: chat.chatId, isActive: true },
         isWrittenByModerator: false,
         isRead: false,
       },
     });
-    return this.chatMapper.toChatDto(chat, lastMessage, unreadCount)
+    return this.chatMapper.toChatDto(chat, lastMessage, unreadCount);
   }
 
   async markModeratorChatAsRead(moderatorId: number, chatId: number) {
@@ -368,30 +368,33 @@ export class ChatService {
     chat.isActive = false;
     await this.chatRepository.save(chat);
 
-    this.chatGateway.emitUserChatClosedMessage(chat.user.userId, await this.mapToChatDto(chat));
+    this.chatGateway.emitUserChatClosedMessage(
+      chat.user.userId,
+      await this.mapToChatDto(chat),
+    );
   }
 
   async findExpiredChats(): Promise<ChatEntity[]> {
     const threshold = new Date(
-        Date.now() - CHAT_EXPIRATION_TIME_SECONDS * 1000,
+      Date.now() - CHAT_EXPIRATION_TIME_SECONDS * 1000,
     );
 
     return this.chatRepository
-        .createQueryBuilder('chat')
-        .innerJoinAndSelect('chat.user', 'u')
-        .where('chat.isActive = :active', { active: true })
-        .andWhere(builder => {
-          const subQuery = builder
-              .subQuery()
-              .select('1')
-              .from(ChatMessageEntity, 'msg')
-              .where('msg.chatChatId = chat.chatId')
-              .andWhere('msg.sentDate > :threshold')
-              .getQuery();
-          return `NOT EXISTS ${subQuery}`;
-        })
-        .setParameter('threshold', threshold)
-        .getMany();
+      .createQueryBuilder('chat')
+      .innerJoinAndSelect('chat.user', 'u')
+      .where('chat.isActive = :active', { active: true })
+      .andWhere((builder) => {
+        const subQuery = builder
+          .subQuery()
+          .select('1')
+          .from(ChatMessageEntity, 'msg')
+          .where('msg.chatChatId = chat.chatId')
+          .andWhere('msg.sentDate > :threshold')
+          .getQuery();
+        return `NOT EXISTS ${subQuery}`;
+      })
+      .setParameter('threshold', threshold)
+      .getMany();
   }
 
   async changeChatAssignee(
@@ -417,8 +420,7 @@ export class ChatService {
     await this.chatRepository.save(chat);
 
     this.chatGateway.emitGeneralChatAssigmentChangeMessage(
-      chatId,
-      newAssigneeModeratorId,
+      await this.mapToChatDto(chat),
     );
 
     return { error: false };
