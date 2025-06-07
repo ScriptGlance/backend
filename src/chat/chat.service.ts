@@ -408,6 +408,7 @@ export class ChatService {
         assignedModerator: newAssigneeModeratorId ? IsNull() : { moderatorId },
         isActive: true,
       },
+      relations: ['assignedModerator', 'user'],
     });
 
     if (!chat) {
