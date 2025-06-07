@@ -418,7 +418,7 @@ export class ChatService {
 
     this.chatGateway.emitGeneralChatAssigmentChangeMessage(
       chatId,
-      newAssigneeModeratorId !== null,
+      newAssigneeModeratorId,
     );
 
     return { error: false };
