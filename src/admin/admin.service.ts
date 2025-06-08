@@ -31,6 +31,7 @@ import { PaymentsService } from '../payments/payments.service';
 import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
 import { ParticipantEntity } from '../common/entities/ParticipantEntity';
 import { TotalStatisticsDto } from './dto/TotalStatisticsDto';
+import { ChatMessageEntity } from '../common/entities/ChatMessageEntity';
 
 interface PaginationParams<TSortField> {
   limit: number;
@@ -49,6 +50,8 @@ export class AdminService {
     private readonly moderatorRepository: Repository<ModeratorEntity>,
     @InjectRepository(ChatEntity)
     private readonly chatRepository: Repository<ChatEntity>,
+    @InjectRepository(ChatMessageEntity)
+    private readonly chatMessageRepository: Repository<ChatMessageEntity>,
     @InjectRepository(PresentationStartEntity)
     private readonly presentationStartRepository: Repository<PresentationStartEntity>,
     @InjectRepository(VideoEntity)
@@ -171,7 +174,6 @@ export class AdminService {
       await this.paymentsService.cancelSubscription(userId);
     }
 
-    // Fetch all user's participants with their IDs
     const userParticipants = await this.participantRepository
       .createQueryBuilder('participant')
       .select('participant.participantId')
@@ -182,8 +184,6 @@ export class AdminService {
     if (userParticipants.length > 0) {
       const participantIds = userParticipants.map((p) => p.participantId);
 
-      // 1. Update ALL presentations where any of user's participants is an owner
-      // This must be done first to break the foreign key constraint
       await this.presentationRepository
         .createQueryBuilder()
         .update()
@@ -193,7 +193,6 @@ export class AdminService {
         })
         .execute();
 
-      // 2. Find the presentations owned by the user - for soft deletion
       const ownedPresentations = await this.presentationRepository
         .createQueryBuilder('presentation')
         .select('presentation.presentationId')
@@ -203,7 +202,6 @@ export class AdminService {
         })
         .getMany();
 
-      // 3. Soft delete user's presentations (that had their owner reference nullified)
       if (ownedPresentations.length > 0) {
         const ownedPresentationIds = ownedPresentations.map(
           (p) => p.presentationId,
@@ -216,12 +214,10 @@ export class AdminService {
           .execute();
       }
 
-      // 4. Handle presentation parts - reassign parts to presentation owners for presentations where user is a participant
       const presentationIdsWithParts = userParticipants.map(
         (p) => p.presentationId,
       );
 
-      // Fetch presentations with their owner participant IDs
       const presentationsWithOwners = await this.presentationRepository
         .createQueryBuilder('pres')
         .select('pres.presentationId')
@@ -233,7 +229,6 @@ export class AdminService {
         .andWhere('pres.deletedAt IS NULL')
         .getMany();
 
-      // Update presentation parts for each presentation where an owner exists
       for (const presentation of presentationsWithOwners) {
         if (presentation.ownerParticipantId) {
           await this.presentationPartRepository
@@ -250,7 +245,6 @@ export class AdminService {
         }
       }
 
-      // 5. Set remaining parts' assigneeParticipantId to null
       await this.presentationPartRepository
         .createQueryBuilder()
         .update()
@@ -287,6 +281,12 @@ export class AdminService {
         }
       }
     }
+
+    await this.chatRepository
+      .createQueryBuilder()
+      .delete()
+      .where(`userUserId = :userId`, { userId })
+      .execute();
 
     await this.userRepository.softRemove(user);
 
