@@ -61,6 +61,7 @@ import { UserEntity } from '../common/entities/UserEntity';
 import { VideosLeftDto } from './dto/VideosLeftDto';
 import { AcceptInvitationDto } from './dto/AcceptInvitationDto';
 import { PresentationPartContentService } from './presentation-part-content.service';
+import { StartVideoRecordingDto } from './dto/StartVideoRecordingDto';
 
 ffmpeg.setFfprobePath('ffprobe');
 
@@ -949,6 +950,59 @@ export class PresentationsService {
     return randomBytes(16).toString('hex');
   }
 
+  async startVideoRecording(
+    userId: number,
+    presentationId: number,
+  ): Promise<StandardResponse<StartVideoRecordingDto>> {
+    await this.findOneById(presentationId, userId);
+
+    const activeSession = await this.presentationStartRepository.findOne({
+      where: { presentation: { presentationId }, endDate: IsNull() },
+    });
+
+    if (!activeSession) {
+      throw new NotFoundException('No active presentation session');
+    }
+
+    const user = await this.userRepository
+      .createQueryBuilder('u')
+      .leftJoinAndMapOne(
+        'u.userPremium',
+        UserWithPremiumEntity,
+        'prem',
+        'prem.user_id = u.user_id',
+      )
+      .where('u.user_id = :id', { id: userId })
+      .getOne();
+
+    const userHasPremium = user?.userPremium?.has_premium === true;
+
+    if (!userHasPremium) {
+      const videosCount = await this.videoRepository
+        .createQueryBuilder('v')
+        .innerJoin('v.presentationStart', 'ps')
+        .where('ps.presentation_start_id = :startId', {
+          startId: activeSession.presentationStartId,
+        })
+        .andWhere('v.userUserId = :uid', { uid: userId })
+        .getCount();
+
+      if (videosCount >= FREE_VIDEOS_PER_PRESENTATION) {
+        throw new ForbiddenException(
+          `Free users can upload up to ${FREE_VIDEOS_PER_PRESENTATION} videos per presentation`,
+        );
+      }
+    }
+
+    return {
+      error: false,
+      data: {
+        presentation_start_id: activeSession.presentationStartId,
+        current_timestamp: Date.now(),
+      },
+    };
+  }
+
   //TODO check the video watermark
   async uploadPresentationVideo(
     presentationId: number,
@@ -961,21 +1015,15 @@ export class PresentationsService {
       throw new NotFoundException('Presentation not found');
     }
 
-    const recordingStart = new Date(dto.startTimestamp);
-    const presentationStart = await this.presentationStartRepository
-      .createQueryBuilder('ps')
-      .innerJoin('ps.presentation', 'p')
-      .where('p.presentation_id = :pid', { pid: presentationId })
-      .andWhere('ps.start_date <= :ts', { ts: recordingStart })
-      .andWhere('(ps.end_date >= :ts OR ps.end_date IS NULL)', {
-        ts: recordingStart,
-      })
-      .getOne();
+    const presentationStart = await this.presentationStartRepository.findOne({
+      where: {
+        presentationStartId: dto.presentationStartId,
+        presentation: { presentationId: presentationId },
+      },
+    });
 
     if (!presentationStart) {
-      throw new NotFoundException(
-        'No presentation start matching given timestamp',
-      );
+      throw new NotFoundException('No matching presentation start found');
     }
 
     const user = await this.userRepository
@@ -1027,7 +1075,7 @@ export class PresentationsService {
       duration: durationMs,
       photoPreviewLink: thumbnailPath,
       shareCode,
-      recordingStartDate: recordingStart,
+      recordingStartDate: new Date(dto.startTimestamp),
       user: presentation.participants[0].user,
     });
     await this.videoRepository.save(videoEntity);
