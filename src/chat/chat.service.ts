@@ -6,7 +6,7 @@ import {
 import { ChatMessageDto } from './dto/ChatMessageDto';
 import { StandardResponse } from '../common/interface/StandardResponse';
 import { ChatEntity } from '../common/entities/ChatEntity';
-import { IsNull, Repository, In, Not } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ChatMapper } from './chat.mapper';
 import { ChatMessageEntity } from '../common/entities/ChatMessageEntity';
@@ -15,7 +15,13 @@ import { UserUnreadMessagesCountDto } from './dto/UserUnreadMessagesCountDto';
 import { ModeratorUnreadMessagesCountsDto } from './dto/ModeratorUnreadMessagesCountsDto';
 import { ChatDto } from './dto/ChatDto';
 import { ModeratorEntity } from '../common/entities/ModeratorEntity';
-import {CHAT_EXPIRATION_TIME_SECONDS} from "../common/Constants";
+import {
+  CHAT_CLOSED_NOTIFICATION_BODY,
+  CHAT_CLOSED_NOTIFICATION_TITLE,
+  CHAT_EXPIRATION_TIME_SECONDS,
+  NEW_CHAT_MESSAGE_NOTIFICATION_TITLE,
+} from '../common/Constants';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ChatService {
@@ -26,6 +32,7 @@ export class ChatService {
     private readonly chatMessageRepository: Repository<ChatMessageEntity>,
     private readonly chatMapper: ChatMapper,
     private readonly chatGateway: ChatGateway,
+    private readonly notificationService: NotificationsService,
   ) {}
 
   async getActiveUserChat(
@@ -35,13 +42,14 @@ export class ChatService {
   ): Promise<StandardResponse<ChatMessageDto[]>> {
     const chat = await this.chatRepository.findOne({
       where: { user: { userId }, isActive: true },
+      relations: ['user'],
     });
 
     if (!chat) {
       return { data: [], error: false };
     }
 
-    await this.markMessagesAsRead(chat.chatId, true);
+    await this.markMessagesAsRead(chat.user.userId, true);
 
     const messages = await this.chatMessageRepository.find({
       where: { chat: { chatId: chat.chatId } },
@@ -118,6 +126,14 @@ export class ChatService {
 
     this.chatGateway.emitModeratorMessage(saved);
 
+    if (chat.user.fcmToken != null && chat.user.fcmToken.length > 0) {
+      await this.notificationService.sendPushNotification(
+        chat.user.fcmToken,
+        NEW_CHAT_MESSAGE_NOTIFICATION_TITLE,
+        message.text,
+      );
+    }
+
     return {
       data: this.chatMapper.toChatMessageDto(saved),
       error: false,
@@ -156,23 +172,32 @@ export class ChatService {
   async markUserChatAsRead(userId: number): Promise<StandardResponse<void>> {
     const chat = await this.chatRepository.findOne({
       where: { user: { userId }, isActive: true },
-      select: ['chatId'],
+      relations: ['user'],
     });
 
     if (!chat) {
       return { error: false };
     }
 
-    await this.markMessagesAsRead(chat.chatId, true);
+    await this.markMessagesAsRead(chat.user.userId, true);
 
     return { error: false };
   }
 
-  private async markMessagesAsRead(chatId: number, isUser: boolean) {
-    await this.chatMessageRepository.update(
-      { chat: { chatId }, isWrittenByModerator: isUser },
-      { isRead: true },
-    );
+  private async markMessagesAsRead(userId: number, isUser: boolean) {
+    const subQuery = this.chatRepository
+      .createQueryBuilder('chat')
+      .select('chat.chat_id')
+      .where('chat.userUserId = :userId', { userId });
+
+    await this.chatMessageRepository
+      .createQueryBuilder()
+      .update(ChatMessageEntity)
+      .set({ isRead: true })
+      .where(`chatChatId IN (${subQuery.getQuery()})`)
+      .andWhere('isWrittenByModerator = :isUser', { isUser })
+      .setParameters({ userId, isUser })
+      .execute();
   }
 
   async getModeratorChatsUnreadCounts(
@@ -185,7 +210,7 @@ export class ChatService {
     const unreadModeratorMessagesCount = await this.chatMessageRepository.count(
       {
         where: {
-          chat: { assignedModerator: { moderatorId } },
+          chat: { assignedModerator: { moderatorId }, isActive: true },
           isWrittenByModerator: false,
           isRead: false,
         },
@@ -265,30 +290,30 @@ export class ChatService {
 
   private async mapToChatDto(chat: ChatEntity) {
     const lastMessage = await this.chatMessageRepository.findOne({
-      where: {chat: {chatId: chat.chatId}},
-      order: {sentDate: 'DESC'},
+      where: { chat: { chatId: chat.chatId } },
+      order: { sentDate: 'DESC' },
     });
     const unreadCount = await this.chatMessageRepository.count({
       where: {
-        chat: {chatId: chat.chatId, isActive: true},
+        chat: { chatId: chat.chatId, isActive: true },
         isWrittenByModerator: false,
         isRead: false,
       },
     });
-    return this.chatMapper.toChatDto(chat, lastMessage, unreadCount)
+    return this.chatMapper.toChatDto(chat, lastMessage, unreadCount);
   }
 
   async markModeratorChatAsRead(moderatorId: number, chatId: number) {
     const chat = await this.chatRepository.findOne({
       where: { chatId, assignedModerator: { moderatorId }, isActive: true },
-      select: ['chatId'],
+      relations: ['user'],
     });
 
     if (!chat) {
       throw new NotFoundException('Chat not found');
     }
 
-    await this.markMessagesAsRead(chat.chatId, false);
+    await this.markMessagesAsRead(chat.user.userId, false);
 
     return { error: false };
   }
@@ -325,7 +350,7 @@ export class ChatService {
     }
 
     if (chat.assignedModerator) {
-      await this.markMessagesAsRead(chatId, false);
+      await this.markMessagesAsRead(chat.user.userId, false);
     }
 
     const userId = chat.user.userId;
@@ -361,6 +386,14 @@ export class ChatService {
 
     await this.closeActiveChat(chat);
 
+    if (chat.user.fcmToken != null && chat.user.fcmToken.length > 0) {
+      await this.notificationService.sendPushNotification(
+        chat.user.fcmToken,
+        CHAT_CLOSED_NOTIFICATION_TITLE,
+        CHAT_CLOSED_NOTIFICATION_BODY,
+      );
+    }
+
     return { error: false };
   }
 
@@ -368,30 +401,33 @@ export class ChatService {
     chat.isActive = false;
     await this.chatRepository.save(chat);
 
-    this.chatGateway.emitUserChatClosedMessage(chat.user.userId, await this.mapToChatDto(chat));
+    this.chatGateway.emitUserChatClosedMessage(
+      chat.user.userId,
+      await this.mapToChatDto(chat),
+    );
   }
 
   async findExpiredChats(): Promise<ChatEntity[]> {
     const threshold = new Date(
-        Date.now() - CHAT_EXPIRATION_TIME_SECONDS * 1000,
+      Date.now() - CHAT_EXPIRATION_TIME_SECONDS * 1000,
     );
 
     return this.chatRepository
-        .createQueryBuilder('chat')
-        .innerJoinAndSelect('chat.user', 'u')
-        .where('chat.isActive = :active', { active: true })
-        .andWhere(builder => {
-          const subQuery = builder
-              .subQuery()
-              .select('1')
-              .from(ChatMessageEntity, 'msg')
-              .where('msg.chatChatId = chat.chatId')
-              .andWhere('msg.sentDate > :threshold')
-              .getQuery();
-          return `NOT EXISTS ${subQuery}`;
-        })
-        .setParameter('threshold', threshold)
-        .getMany();
+      .createQueryBuilder('chat')
+      .innerJoinAndSelect('chat.user', 'u')
+      .where('chat.isActive = :active', { active: true })
+      .andWhere((builder) => {
+        const subQuery = builder
+          .subQuery()
+          .select('1')
+          .from(ChatMessageEntity, 'msg')
+          .where('msg.chatChatId = chat.chatId')
+          .andWhere('msg.sentDate > :threshold')
+          .getQuery();
+        return `NOT EXISTS ${subQuery}`;
+      })
+      .setParameter('threshold', threshold)
+      .getMany();
   }
 
   async changeChatAssignee(
@@ -405,6 +441,7 @@ export class ChatService {
         assignedModerator: newAssigneeModeratorId ? IsNull() : { moderatorId },
         isActive: true,
       },
+      relations: ['assignedModerator', 'user'],
     });
 
     if (!chat) {
@@ -417,8 +454,7 @@ export class ChatService {
     await this.chatRepository.save(chat);
 
     this.chatGateway.emitGeneralChatAssigmentChangeMessage(
-      chatId,
-      newAssigneeModeratorId !== null,
+      await this.mapToChatDto(chat),
     );
 
     return { error: false };

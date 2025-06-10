@@ -116,9 +116,7 @@ export class ChatGateway extends BaseGateway {
     this.server.to(room).emit('new_message', message);
   }
 
-  emitGeneralChatAssigmentChangeMessage(chatId: number, isAssigned: boolean) {
-    this.server
-      .to(this.GENERAL_CHATS_ROOM)
-      .emit('assignment_change', { chatId, isAssigned });
+  emitGeneralChatAssigmentChangeMessage(chat: ChatDto) {
+    this.server.to(this.GENERAL_CHATS_ROOM).emit('assignment_change', chat);
   }
 }

@@ -18,6 +18,8 @@ export class ChatMessageEntity {
   @Column({ name: 'is_read', default: false })
   isRead: boolean;
 
-  @ManyToOne(() => ChatEntity, (chat) => chat.chatMessages)
+  @ManyToOne(() => ChatEntity, (chat) => chat.chatMessages, {
+    onDelete: 'CASCADE',
+  })
   chat: ChatEntity;
 }

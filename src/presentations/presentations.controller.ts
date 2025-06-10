@@ -67,21 +67,51 @@ export class PresentationsController {
   @ApiQuery({ name: 'limit', required: false, type: Number, default: 10 })
   @ApiQuery({ name: 'offset', required: false, type: Number, default: 0 })
   @ApiQuery({ name: 'search', required: false, type: String, default: '' })
-  @ApiQuery({ name: 'sort', required: false, type: String, default: 'byUpdatedAt' })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    type: String,
+    default: 'byUpdatedAt',
+  })
   @ApiQuery({ name: 'owner', required: false, type: String, default: 'all' })
-  @ApiQuery({ name: 'lastChange', required: false, type: String, default: 'allTime' })
+  @ApiQuery({
+    name: 'lastChange',
+    required: false,
+    type: String,
+    default: 'allTime',
+  })
   @ApiQuery({ name: 'type', required: false, type: String, default: 'all' })
   async getPresentations(
     @GetUser('id') userId: number,
     @Query('limit', ParseIntPipe) limit = 10,
     @Query('offset', ParseIntPipe) offset = 0,
-    @Query('search') search: string = "",
-    @Query('sort') sort: 'byUpdatedAt' | 'byName' | 'byCreatedAt' | 'byParticipantsCount' = 'byUpdatedAt',
+    @Query('search') search: string = '',
+    @Query('sort')
+    sort:
+      | 'byUpdatedAt'
+      | 'byName'
+      | 'byCreatedAt'
+      | 'byParticipantsCount' = 'byUpdatedAt',
     @Query('owner') owner: 'me' | 'others' | 'all' = 'all',
-    @Query('lastChange') lastChange: 'today' | 'lastWeek' | 'lastMonth' | 'lastYear' | 'allTime' = 'allTime',
+    @Query('lastChange')
+    lastChange:
+      | 'today'
+      | 'lastWeek'
+      | 'lastMonth'
+      | 'lastYear'
+      | 'allTime' = 'allTime',
     @Query('type') type: 'individual' | 'group' | 'all' = 'all',
   ) {
-    return await this.service.getPresentations(userId, limit, offset, search, sort, owner, lastChange, type);
+    return await this.service.getPresentations(
+      userId,
+      limit,
+      offset,
+      search,
+      sort,
+      owner,
+      lastChange,
+      type,
+    );
   }
 
   @Get(':id')
@@ -196,6 +226,17 @@ export class PresentationsController {
     return await this.service.getPresentationCursorPositions(userId, id);
   }
 
+  @Post(':id/start-recording')
+  @ApiOperation({
+    summary: 'Start video recording',
+  })
+  async startVideoRecording(
+    @GetUser('id') userId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return await this.service.startVideoRecording(userId, id);
+  }
+
   @Post(':id/videos')
   @ApiOperation({ summary: 'Upload a .webm video for a presentation part' })
   @ApiConsumes('multipart/form-data')
@@ -243,9 +284,15 @@ export class PresentationsController {
     @Body('partName') partName: string,
     @Body('partOrder', ParseIntPipe) partOrder: number,
     @Body('startTimestamp', ParseIntPipe) startTimestamp: number,
+    @Body('presentationStartId', ParseIntPipe) presentationStartId: number,
   ) {
     try {
-      const dto: VideoUploadDto = { partName, partOrder, startTimestamp };
+      const dto: VideoUploadDto = {
+        partName,
+        partOrder,
+        startTimestamp,
+        presentationStartId,
+      };
       return await this.service.uploadPresentationVideo(id, userId, file, dto);
     } catch (err) {
       if (file?.path) {

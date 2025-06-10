@@ -17,8 +17,8 @@ export class ParticipantEntity {
   @PrimaryGeneratedColumn({ name: 'participant_id' })
   participantId: number;
 
-  @Column({ name: 'presentation_id' })
-  presentationId: number;
+  @Column({ name: 'presentation_id', nullable: true })
+  presentationId: number | null;
 
   @Column({ name: 'user_id' })
   userId: number;
@@ -29,9 +29,10 @@ export class ParticipantEntity {
   @ManyToOne(
     () => PresentationEntity,
     (presentation) => presentation.participants,
+    { nullable: true },
   )
   @JoinColumn({ name: 'presentation_id' })
-  presentation: PresentationEntity;
+  presentation: PresentationEntity | null;
 
   @ManyToOne(() => UserEntity, (user) => user.participations)
   @JoinColumn({ name: 'user_id' })
