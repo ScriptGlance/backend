@@ -11,15 +11,4 @@ export class AdminEntity {
   @Column({ name: 'email', unique: true, length: 100 })
   email: string;
 
-  @Column({ name: 'google_id', nullable: true })
-  googleId?: string;
-
-  @Column({ name: 'facebook_id', nullable: true })
-  facebookId?: string;
-
-  @Column({ name: 'refresh_token', nullable: true })
-  refreshToken?: string;
-
-  @Column({ name: 'access_token', nullable: true })
-  accessToken?: string;
 }

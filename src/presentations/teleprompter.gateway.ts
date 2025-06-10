@@ -6,7 +6,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+import { Server } from 'socket.io';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { JwtService } from '@nestjs/jwt';
@@ -38,11 +38,24 @@ import { RecordedVideosCountChangeEventDto } from './dto/RecordedVideosCountChan
 import { PartReassignReason } from '../common/enum/PartReassignReason';
 import { WaitingForUserEventDto } from './dto/WaitingForUserEventDto';
 import { PartReadingConfirmationRequiredEventDto } from './dto/PartReadingConfirmationRequiredEventDto';
-import { TIME_TO_CONFIRM_PART_READING_SECONDS } from '../common/Constants';
+import {
+  NOTIFICATION_PART_NAME_PLACEHOLDER,
+  NOTIFICATION_PRESENTATION_NAME_PLACEHOLDER,
+  TIME_TO_CONFIRM_PART_READING_SECONDS,
+  WAITING_FOR_USER_NOTIFICATION_BODY,
+  WAITING_FOR_USER_NOTIFICATION_TITLE,
+  YOUR_PART_REASSIGNED_NOTIFICATION_BODY,
+  YOUR_PART_REASSIGNED_NOTIFICATION_TITLE,
+} from '../common/Constants';
 import { BasePresentationGateway } from '../common/base/basePresentation.gateway';
 import { PresentationPartContentService } from './presentation-part-content.service';
 import { PartTarget } from '../common/enum/PartTarget';
+import { NotificationsService } from '../notifications/notifications.service';
+import { Socket as BaseSocket } from 'socket.io/dist/socket';
+import { SocketData } from '../common/interface/SocketData';
+import { UserEntity } from '../common/entities/UserEntity';
 
+type Socket = BaseSocket<any, any, any, SocketData>;
 type TeleprompterSocketData = { user?: { id: number } };
 type TeleprompterSocket = Socket & { data: TeleprompterSocketData };
 
@@ -74,8 +87,11 @@ export class TeleprompterGateway
     private readonly presentationPartRepository: Repository<PresentationPartEntity>,
     @InjectRepository(PresentationStartEntity)
     private readonly presentationStartRepository: Repository<PresentationStartEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
     private readonly presentationsGateway: PresentationsGateway,
     private readonly presentationPartContentService: PresentationPartContentService,
+    private readonly notificationsService: NotificationsService,
   ) {
     super(jwtService, configService, presentationRepository);
   }
@@ -848,6 +864,22 @@ export class TeleprompterGateway
         : PartReassignReason.MissingAssignee,
     );
     this.emitWaitingForUserEvent(presentationId, currentReaderId);
+
+    const { partName, presentationName } =
+      await this.getPartAndPresentationNames(
+        session.currentReadingPosition.partId,
+      );
+
+    const notificationBody = this.formatNotificationText(
+      WAITING_FOR_USER_NOTIFICATION_BODY,
+      partName,
+      presentationName,
+    );
+    await this.sendPushNotification(
+      currentReaderId,
+      WAITING_FOR_USER_NOTIFICATION_TITLE,
+      notificationBody,
+    );
   }
 
   private isUserJoined(presentationId: number, userId: number): boolean {
@@ -879,6 +911,7 @@ export class TeleprompterGateway
     if (!currentPart) {
       return;
     }
+    const oldReaderId = currentPart.assigneeUserId;
     currentPart.assigneeUserId = readerId;
 
     if (isFromStartPosition) {
@@ -896,6 +929,68 @@ export class TeleprompterGateway
 
     await this.setActiveSession(presentationId, session);
     this.emitPartReassignedEvent(presentationId, readerId, currentPart.partId);
+
+    const { partName, presentationName } =
+      await this.getPartAndPresentationNames(
+        session.currentReadingPosition.partId,
+      );
+
+    const notificationBody = this.formatNotificationText(
+      YOUR_PART_REASSIGNED_NOTIFICATION_BODY,
+      partName,
+      presentationName,
+    );
+
+    await this.sendPushNotification(
+      oldReaderId,
+      YOUR_PART_REASSIGNED_NOTIFICATION_TITLE,
+      notificationBody,
+    );
+  }
+
+  private async sendPushNotification(
+    userId: number,
+    title: string,
+    body: string,
+  ) {
+    const user = await this.userRepository.findOne({
+      where: { userId },
+      select: ['fcmToken'],
+    });
+    if (!user?.fcmToken) {
+      return;
+    }
+    await this.notificationsService.sendPushNotification(
+      user.fcmToken,
+      title,
+      body,
+    );
+  }
+
+  private formatNotificationText(
+    template: string,
+    partName: string,
+    presentationName: string,
+  ) {
+    return template
+      .replace(NOTIFICATION_PART_NAME_PLACEHOLDER, partName)
+      .replace(NOTIFICATION_PRESENTATION_NAME_PLACEHOLDER, presentationName);
+  }
+
+  private async getPartAndPresentationNames(
+    partId: number,
+  ): Promise<{ partName: string; presentationName: string }> {
+    const part = await this.presentationPartRepository
+      .createQueryBuilder('part')
+      .leftJoinAndSelect('part.presentation', 'presentation')
+      .select(['part.name', 'presentation.name'])
+      .where('part.presentationPartId = :id', { id: partId })
+      .getOne();
+
+    return {
+      partName: part?.name ?? '',
+      presentationName: part?.presentation.name ?? '',
+    };
   }
 
   async updatePartAssignee(

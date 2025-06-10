@@ -8,6 +8,7 @@ import {ChatMessageEntity} from "../common/entities/ChatMessageEntity";
 import {AuthModule} from "../auth/auth.module";
 import {ChatGateway} from "./chat.gateway";
 import {ChatCleanupService} from "./chat-cleanup.service";
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   controllers: [ChatController],
@@ -15,6 +16,7 @@ import {ChatCleanupService} from "./chat-cleanup.service";
   imports: [
     TypeOrmModule.forFeature([ChatEntity, ChatMessageEntity]),
     AuthModule,
+    NotificationsModule,
   ],
 })
 export class ChatModule {}
