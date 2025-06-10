@@ -21,6 +21,7 @@ import { UserWithPremiumEntity } from '../common/entities/UserWithPremiumEntity'
 import { UserModule } from '../user/user.module';
 import { UserInvitationEntity } from '../common/entities/UserInvitationEntity';
 import { PresentationPartContentService } from './presentation-part-content.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { PresentationPartContentService } from './presentation-part-content.serv
     AuthModule,
     UserModule,
     MulterModule.register({ dest: './uploads' }),
+    NotificationsModule,
   ],
   controllers: [PresentationsController],
   providers: [

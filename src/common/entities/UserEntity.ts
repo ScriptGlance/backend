@@ -42,17 +42,8 @@ export class UserEntity {
   @Column({ name: 'is_temporary_password', default: false })
   isTemporaryPassword: boolean;
 
-  @Column({ name: 'google_id', nullable: true })
-  googleId?: string;
-
-  @Column({ name: 'facebook_id', nullable: true })
-  facebookId?: string;
-
-  @Column({ name: 'refresh_token', nullable: true })
-  refreshToken?: string;
-
-  @Column({ name: 'access_token', nullable: true })
-  accessToken?: string;
+  @Column({ name: 'fcm_token', nullable: true })
+  fcmToken?: string;
 
   @CreateDateColumn({ name: 'registered_at' })
   registeredAt: Date;
@@ -73,7 +64,10 @@ export class UserEntity {
 
   @OneToMany(() => ChatEntity, (assignedChat) => assignedChat.user)
   chats: ChatEntity[];
-  
-  @OneToMany(() => UserInvitationEntity, (userInvitation) => userInvitation.user)
+
+  @OneToMany(
+    () => UserInvitationEntity,
+    (userInvitation) => userInvitation.user,
+  )
   userInvitations: UserInvitationEntity[];
 }

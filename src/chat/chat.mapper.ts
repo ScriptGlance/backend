@@ -35,6 +35,7 @@ export class ChatMapper {
       last_message: lastMessage?.text ?? '',
       last_message_sent_date: lastMessage?.sentDate ?? new Date(0),
       unread_messages_count: unreadCount,
+      assigned_moderator_id: chat.assignedModerator?.moderatorId ?? null,
     };
   }
 }

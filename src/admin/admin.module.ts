@@ -16,6 +16,7 @@ import { PaymentsModule } from '../payments/payments.module';
 import { PresentationPartEntity } from '../common/entities/PresentationPartEntity';
 import { ParticipantEntity } from '../common/entities/ParticipantEntity';
 import { PresentationEntity } from '../common/entities/PresentationEntity';
+import { ChatMessageEntity } from '../common/entities/ChatMessageEntity';
 
 @Module({
   controllers: [AdminController],
@@ -28,6 +29,7 @@ import { PresentationEntity } from '../common/entities/PresentationEntity';
       UserEntity,
       ModeratorEntity,
       ChatEntity,
+      ChatMessageEntity,
       PresentationStartEntity,
       VideoEntity,
       PresentationPartEntity,

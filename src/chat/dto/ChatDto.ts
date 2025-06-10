@@ -7,4 +7,5 @@ export class ChatDto {
   last_message: string;
   last_message_sent_date: Date;
   unread_messages_count: number;
+  assigned_moderator_id: number | null;
 }
