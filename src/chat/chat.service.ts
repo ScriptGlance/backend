@@ -6,7 +6,7 @@ import {
 import { ChatMessageDto } from './dto/ChatMessageDto';
 import { StandardResponse } from '../common/interface/StandardResponse';
 import { ChatEntity } from '../common/entities/ChatEntity';
-import { IsNull, Repository} from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ChatMapper } from './chat.mapper';
 import { ChatMessageEntity } from '../common/entities/ChatMessageEntity';
@@ -15,7 +15,13 @@ import { UserUnreadMessagesCountDto } from './dto/UserUnreadMessagesCountDto';
 import { ModeratorUnreadMessagesCountsDto } from './dto/ModeratorUnreadMessagesCountsDto';
 import { ChatDto } from './dto/ChatDto';
 import { ModeratorEntity } from '../common/entities/ModeratorEntity';
-import { CHAT_EXPIRATION_TIME_SECONDS } from '../common/Constants';
+import {
+  CHAT_CLOSED_NOTIFICATION_BODY,
+  CHAT_CLOSED_NOTIFICATION_TITLE,
+  CHAT_EXPIRATION_TIME_SECONDS,
+  NEW_CHAT_MESSAGE_NOTIFICATION_TITLE,
+} from '../common/Constants';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ChatService {
@@ -26,6 +32,7 @@ export class ChatService {
     private readonly chatMessageRepository: Repository<ChatMessageEntity>,
     private readonly chatMapper: ChatMapper,
     private readonly chatGateway: ChatGateway,
+    private readonly notificationService: NotificationsService,
   ) {}
 
   async getActiveUserChat(
@@ -119,6 +126,14 @@ export class ChatService {
 
     this.chatGateway.emitModeratorMessage(saved);
 
+    if (chat.user.fcmToken != null && chat.user.fcmToken.length > 0) {
+      await this.notificationService.sendPushNotification(
+        chat.user.fcmToken,
+        NEW_CHAT_MESSAGE_NOTIFICATION_TITLE,
+        message.text,
+      );
+    }
+
     return {
       data: this.chatMapper.toChatMessageDto(saved),
       error: false,
@@ -171,18 +186,18 @@ export class ChatService {
 
   private async markMessagesAsRead(userId: number, isUser: boolean) {
     const subQuery = this.chatRepository
-        .createQueryBuilder('chat')
-        .select('chat.chat_id')
-        .where('chat.userUserId = :userId', { userId });
+      .createQueryBuilder('chat')
+      .select('chat.chat_id')
+      .where('chat.userUserId = :userId', { userId });
 
     await this.chatMessageRepository
-        .createQueryBuilder()
-        .update(ChatMessageEntity)
-        .set({ isRead: true })
-        .where(`chatChatId IN (${subQuery.getQuery()})`)
-        .andWhere('isWrittenByModerator = :isUser', { isUser })
-        .setParameters({ userId, isUser })
-        .execute();
+      .createQueryBuilder()
+      .update(ChatMessageEntity)
+      .set({ isRead: true })
+      .where(`chatChatId IN (${subQuery.getQuery()})`)
+      .andWhere('isWrittenByModerator = :isUser', { isUser })
+      .setParameters({ userId, isUser })
+      .execute();
   }
 
   async getModeratorChatsUnreadCounts(
@@ -370,6 +385,14 @@ export class ChatService {
     }
 
     await this.closeActiveChat(chat);
+
+    if (chat.user.fcmToken != null && chat.user.fcmToken.length > 0) {
+      await this.notificationService.sendPushNotification(
+        chat.user.fcmToken,
+        CHAT_CLOSED_NOTIFICATION_TITLE,
+        CHAT_CLOSED_NOTIFICATION_BODY,
+      );
+    }
 
     return { error: false };
   }

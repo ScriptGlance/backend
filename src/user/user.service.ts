@@ -72,6 +72,7 @@ export class UserService {
     lastName: string,
     avatar: Express.Multer.File | null,
     password: string = '',
+    fcmToken: string = '',
   ): Promise<StandardResponse<UserDto>> {
     const user = await this.userRepository.findOne({ where: { userId } });
     if (!user) {
@@ -85,6 +86,10 @@ export class UserService {
       user.lastName = lastName;
     }
 
+    if (fcmToken) {
+      user.fcmToken = fcmToken;
+    }
+
     if (password) {
       user.password = await bcrypt.hash(password, 10);
       user.isTemporaryPassword = false;
@@ -96,7 +101,7 @@ export class UserService {
         try {
           await fs.unlink(oldPath);
         } catch (err) {
-          if (err.code !== 'ENOENT') {
+          if ((err as { code: string }).code !== 'ENOENT') {
             throw new InternalServerErrorException(
               'Failed to remove old avatar',
             );
