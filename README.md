@@ -1,98 +1,417 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+<div align="center">
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+# 🎬 ScriptGlance Backend
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+*Collaborative teleprompter platform for presentations*
 
-## Description
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![NestJS](https://img.shields.io/badge/nestjs-%23E0234E.svg?style=for-the-badge&logo=nestjs&logoColor=white)](https://nestjs.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+---
 
-## Project setup
+**ScriptGlance** is a collaborative video presentations platform with a focus on advanced teleprompter functionality, as well as real-time features including authentication, presentation management, video processing, chat, and payment integration.
+
+</div>
+
+---
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 🔐 **Authentication & Authorization**
+- 🔑 JWT-based authentication  
+- 🌐 Google OAuth integration  
+- 📘 Facebook OAuth integration  
+- 👥 Role-based access control (User, Moderator, Admin)  
+- 📧 Email verification and password reset  
+
+### 📋 **Presentation Management**
+- ➕ Create and manage presentations  
+- 🤝 Collaborative presentation parts  
+- 👫 Participant management  
+- ⚡ Real-time presentation control  
+
+### ✏️ **Real-time Collaborative Text Editing**
+- 🔄 Operational Transformation (OT) for conflict-free collaborative editing  
+- 👥 Multiple users editing presentation content simultaneously  
+- 🎯 Character-level synchronization  
+- 🖱️ Real-time cursor positions and user presence  
+
+### 📺 **Teleprompter System**
+- 🎯 Real-time reading position tracking
+- 👑 Dynamic ownership management
+- 🔄 Automatic part transitions
+- ⏰ Reading confirmation system with timeouts
+- 🔔 Part reassignment notifications
+- 📊 Session state management with Redis
+- 🎥 Video recording integration tracking
+- 👥 Multi-user session handling
+
+</td>
+<td width="50%" valign="top">
+
+### 🎥 **Video Processing**
+- 📤 Video upload and processing with FFmpeg  
+- 🖼️ Video preview generation  
+- 🔗 Shared video functionality  
+- 🗂️ File serving for avatars and previews  
+
+### 💬 **Real-time Communication**
+- 🔌 WebSocket support with Socket.IO  
+- 💭 Live chat functionality  
+- 🔔 Real-time notifications  
+- 🎬 Presentation synchronization  
+- ✏️ Collaborative text editing synchronization  
+
+### 💳 **Payment Integration**
+- ⭐ Premium subscription management  
+- 💰 Payment processing  
+- 📊 Transaction tracking  
+- 🔄 Subscription lifecycle management  
+
+### ⚙️ **Admin Features**
+- 👤 User management  
+- 📨 Invitation system  
+- 🛡️ Moderation tools  
+- 📈 Analytics and monitoring  
+
+</td>
+</tr>
+</table>
+
+
+---
+
+## 🛠️ Tech Stack
+
+<div align="center">
+
+| Category | Technologies |
+|----------|-------------|
+| **Framework** | ![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=flat-square&logo=nestjs&logoColor=white) |
+| **Language** | ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white) |
+| **Database** | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791?style=flat-square&logo=postgresql&logoColor=white) ![TypeORM](https://img.shields.io/badge/TypeORM-FE0803?style=flat-square&logo=typeorm&logoColor=white) |
+| **Cache** | ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white) |
+| **Authentication** | ![Passport](https://img.shields.io/badge/Passport-34E27A?style=flat-square&logo=passport&logoColor=white) (JWT, Google, Facebook) |
+| **Real-time** | ![Socket.IO](https://img.shields.io/badge/Socket.IO-010101?style=flat-square&logo=socket.io&logoColor=white) |
+| **Video Processing** | ![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?style=flat-square&logo=ffmpeg&logoColor=white) |
+| **Documentation** | ![Swagger](https://img.shields.io/badge/Swagger-85EA2D?style=flat-square&logo=swagger&logoColor=black) |
+| **Email** | ![Email](https://img.shields.io/badge/Resend-000000?style=flat-square&logo=mail.ru&logoColor=white) |
+| **Notifications** | ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=flat-square&logo=firebase&logoColor=black) |
+| **Collaborative Editing** | ![OT](https://img.shields.io/badge/Operational_Transformation-4285F4?style=flat-square&logo=google&logoColor=white) |
+
+</div>
+
+---
+
+## 📋 Prerequisites
+
+<div align="center">
+
+| Requirement | Version | Status |
+|-------------|---------|--------|
+| ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white) | Latest | ✅ Required |
+| ![Docker Compose](https://img.shields.io/badge/Docker_Compose-2496ED?style=flat-square&logo=docker&logoColor=white) | Latest | ✅ Required |
+| ![Git](https://img.shields.io/badge/Git-F05032?style=flat-square&logo=git&logoColor=white) | Latest | ✅ Required |
+
+</div>
+
+---
+
+## 🚀 Quick Start
+
+### 📥 Installation
 
 ```bash
-$ npm install
+# Clone the repository
+git clone https://github.com/ScriptGlance/backend.git
+cd backend
+
+# Create the environment file
+touch .env
+# Edit .env with your configuration (see the example configuration below)
 ```
 
-## Compile and run the project
+### ⚙️ Environment Configuration
 
-```bash
-# development
-$ npm run start
+Create a `.env` file in the root directory:
 
-# watch mode
-$ npm run start:dev
+<details>
+<summary>📄 Click to expand environment variables</summary>
 
-# production mode
-$ npm run start:prod
+```env
+# 🗄️ Database Configuration
+DB_HOST=db
+DB_PORT=5432
+DB_USERNAME=scriptglance
+DB_PASSWORD=your_secure_db_password
+DB_NAME=scriptglance
+
+# 🔧 Application Settings
+DEBUG=false
+JWT_SECRET=your-super-secret-jwt-key-here
+FRONTEND_URL=http://localhost:3001
+BACKEND_URL=http://localhost:3000
+
+# 📧 Email Configuration (Resend)
+RESEND_API_KEY=re_your_resend_api_key
+FROM_EMAIL=noreply@scriptglance.com
+EMAIL_SENDER_NAME=ScriptGlance
+
+# 🌐 Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
+SUCCESS_LOGIN_REDIRECT_URL=http://localhost:3001/dashboard
+
+# 📘 Facebook OAuth
+FACEBOOK_APP_ID=your-facebook-app-id
+FACEBOOK_APP_SECRET=your-facebook-app-secret
+FACEBOOK_CALLBACK_URL=http://localhost:3000/auth/facebook/callback
+FACEBOOK_NO_LINKED_EMAIL_ERROR_REDIRECT_URL=http://localhost:3001/auth/facebook-email-error
+
+# 🔴 Redis Configuration
+REDIS_URL=redis://redis:6379
+
+# 💳 Payment Integration
+PAYMENTS_API_TOKEN=your-payment-api-token
+PAYMENTS_API_URL=https://api.payment-provider.com
+SUBSCRIPTION_CHECKOUT_REDIRECT_URL=http://localhost:3001/subscription/success
+PAYMENTS_WEBHOOK_URL=http://localhost:3000/payments/webhook
+
+# 🔥 Firebase Configuration (for notifications)
+FIREBASE_PROJECT_ID=your-firebase-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYour-Private-Key-Here\n-----END PRIVATE KEY-----\n"
 ```
 
-## Run tests
+</details>
 
-```bash
-# unit tests
-$ npm run test
+---
 
-# e2e tests
-$ npm run test:e2e
+## 🐳 Running with Docker Compose
 
-# test coverage
-$ npm run test:cov
+<div align="center">
+
+### 🎯 Main Commands
+
+| Command | Description | Icon |
+|---------|-------------|------|
+| `docker-compose up -d` | Start all services | 🟢 |
+| `docker-compose down` | Stop all services | 🔴 |
+| `docker-compose up --build -d` | Rebuild and restart | 🔄 |
+
+</div>
+
+### 📊 Service URLs
+
+<div align="center">
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| 🌐 **API** | http://localhost:3000 | Main API endpoint |
+| 📖 **Swagger Docs** | http://localhost:3000/docs | API documentation |
+| 🗄️ **PostgreSQL** | localhost:5432 | Database connection |
+| 🔴 **Redis** | localhost:6379 | Cache connection |
+
+</div>
+
+### 🛠️ Docker Services
+
+<div align="center">
+
+| Service | Technology | Purpose |
+|---------|------------|---------|
+| **app** | ![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=flat-square&logo=nestjs&logoColor=white) | Backend application |
+| **db** | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791?style=flat-square&logo=postgresql&logoColor=white) | Database server |
+| **redis** | ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white) | Cache server |
+
+</div>
+
+---
+
+## 📚 API Documentation
+
+<div align="center">
+
+🎯 **Interactive API Documentation**
+
+Once the application is running, explore the full API at:
+**[http://localhost:3000/docs](http://localhost:3000/docs)**
+
+*Complete with request/response schemas and authentication examples*
+
+</div>
+
+---
+
+## 🏗️ Project Architecture
+
+```
+📁 src/
+├── ⚙️ admin/                  # Admin functionality
+├── 🔐 auth/                  # Authentication module
+├── 💬 chat/                  # Real-time chat
+├── 🔧 common/                # Shared utilities
+├── 📧 email/                 # Email services
+├── 📄 migrations/            # Database migrations
+├── 🛡️ moderator/             # Moderator functionality
+├── 🔔 notifications/         # Notifications module
+├── 💳 payments/              # Payment processing
+├── 📋 presentations/         # Presentation management
+├── 🎥 shared-video/          # Shared videos module
+├── 👤 user/                  # User management
+├── app.module.ts            # Main app module
+└── main.ts                  # Application bootstrap
 ```
 
-## Deployment
+---
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## 🔐 Authentication Methods
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+<div align="center">
 
-```bash
-$ npm install -g mau
-$ mau deploy
+### 🎫 Supported Authentication
+
+| Method | Type | Usage |
+|--------|------|-------|
+| **JWT Bearer** | `Authorization: Bearer <token>` | ![JWT](https://img.shields.io/badge/JWT-000000?style=flat-square&logo=jsonwebtokens&logoColor=white) |
+| **Google OAuth** | OAuth 2.0 Flow | ![Google](https://img.shields.io/badge/Google-4285F4?style=flat-square&logo=google&logoColor=white) |
+| **Facebook OAuth** | OAuth 2.0 Flow | ![Facebook](https://img.shields.io/badge/Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white) |
+
+</div>
+
+---
+
+## 🌐 WebSocket Events
+<div align="center">
+<table>
+<tr>
+<td width="50%">
+
+### ✏️ **Collaborative Text Editing**
+- 🔄 OT operations for text changes
+- 🖱️ Real-time cursor tracking
+- 🎯 Text selection synchronization
+- 👥 User presence in editing session
+
+### 🎬 **Presentation Control**
+- 📊 Presentation state changes
+- 🔄 Part transitions
+- 🎥 Video synchronization
+
+</td>
+<td width="50%">
+
+### 💬 **Chat & Notifications**
+- 💭 Chat messages
+- 🔄 Chat state changes
+
+### 📺 **Teleprompter**
+- 👥 User presence in teleprompter session
+- 📍 Current reading position
+- 👑 Owner change events
+- 🔄 Presentation parts reassign events
+- ⏰ Reading confirmation events
+- 🎥 Recording mode changes
+- 📊 Recorded videos count tracking
+- ⚠️ Part reassignment notifications
+- ⏸️ Waiting for user events
+
+</td>
+</tr>
+</table>
+</div>
+
+---
+
+## 🔄 Operational Transformation (OT)
+
+<div align="center">
+
+### 🧠 How OT Works
+
+</div>
+
+| Step | Process | Description |
+|------|---------|-------------|
+| **1️⃣** | **Operations** | Each text change → operation (insert, delete, retain) |
+| **2️⃣** | **Transformation** | Conflicting operations → transformed for consistency |
+| **3️⃣** | **Application** | Transformed operations → applied to document state |
+| **4️⃣** | **Synchronization** | All clients → receive operations in correct order |
+
+### 🎯 Operation Types
+
+<div align="center">
+
+| Operation | Purpose |
+|-----------|---------|
+| **Insert** | Add text at specific position |
+| **Delete** | Remove text from specific position |
+| **Retain** | Keep existing text (positioning) |
+
+</div>
+
+### 💡 Example Flow
+
+```javascript
+// 👤 User A types "Hello" at position 0
+// 👤 User B simultaneously types "Hi" at position 0
+// 🔄 OT transforms operations → consistent state across all clients
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
-## Resources
+## 🎯 Real-time Features
 
-Check out a few resources that may come in handy when working with NestJS:
+<div align="center">
+<table>
+<tr>
+<td width="50%" valign="top">
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### ✏️ **Text Editing Collaboration**
+- 👥 Multiple simultaneous editors
+- 🖱️ Real-time cursor positions
+- 🎯 User presence indicators
+- 🔄 Conflict-free collaborative editing
 
-## Support
+### 📺 **Teleprompter Synchronization**
+- 🎯 Real-time reading position tracking
+- 👑 Dynamic ownership management
+- 🔄 Automatic part transitions
+- ⏰ Reading confirmation system
+- 🔔 Push notification integration
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+</td>
+<td width="50%" valign="top">
 
-## Stay in touch
+### 🎬 **Presentation Synchronization**
+- ⚡ Real-time presentation control
+- 🎥 Synchronized video playback
+- 👫 Participant management
+- 🔔 Live notifications
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### 💬 **Communication**
+- 💭 Live chat functionality
+- 🔔 Real-time notifications
+- 👥 User presence tracking
 
-## License
+</td>
+</tr>
+</table>
+</div>
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+---
+
+<div align="center">
+  
+**Built with ❤️ for seamless collaboration**
+
+[![TypeScript](https://img.shields.io/badge/Made%20with-TypeScript-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
+[![NestJS](https://img.shields.io/badge/Powered%20by-NestJS-red?style=for-the-badge&logo=nestjs)](https://nestjs.com/)
+
+</div>
