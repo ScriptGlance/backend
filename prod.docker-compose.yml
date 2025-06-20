@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: myapp-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - api
+    networks:
+      - app-network
+  frontend:
+    image: name/image:latest
+    container_name: frontend
+    restart: unless-stopped
+    expose:
+      - "5173"
+    env_file:
+      - frontend.env
+    networks:
+      - app-network
+  api:
+    image: name/image:latest
+    container_name: backend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    env_file:
+      - backend.env
+    environment:
+      - NODE_ENV=production
+    command: sh -c "npm run migration:run && npm run start:prod"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    volumes:
+      - /srv/myapp-uploads:/usr/src/app/uploads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    user: root
+
+
+  db:
+    image: postgres:15-alpine
+    container_name: myapp-postgres-prod
+    restart: unless-stopped
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - ./path/to/your/postgres/data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $${DB_USERNAME} -d $${DB_NAME} -q || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: myapp-redis-prod
+    restart: unless-stopped
+    expose:
+      - "6379"
+    volumes:
+      - redisdata_prod:/data
+      - ./path/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+volumes:
+  pgdata_prod:
+  redisdata_prod:
+
+networks:
+  app-network:
+    driver: bridge
